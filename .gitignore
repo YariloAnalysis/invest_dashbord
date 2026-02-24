@@ -1,2 +1,11 @@
+# PyCharm
+.idea/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Секреты
 db.env
 .streamlit/secrets.toml
