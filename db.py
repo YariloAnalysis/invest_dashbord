@@ -2,26 +2,28 @@ import streamlit as st
 import psycopg2
 import pandas as pd
 import os
+from dotenv import load_dotenv
+@st.cache_resource
 @st.cache_resource
 def init_connection():
-    if hasattr(st, 'secrets') and 'database' in st.secrets:
+    try:
+        # Streamlit Cloud
         return psycopg2.connect(
-            host=st.secrets["database"]["host"],
-            port=st.secrets["database"]["port"],
-            database=st.secrets["database"]["database"],
-            user=st.secrets["database"]["user"],
-            password=st.secrets["database"]["password"]
+            host=st.secrets["DB_HOST"],
+            port=st.secrets["DB_PORT"],
+            dbname=st.secrets["DB_NAME"],
+            user=st.secrets["DB_USER"],
+            password=st.secrets["DB_PASSWORD"],
         )
-        # Если запущено локально
-    else:
-        from dotenv import load_dotenv
+    except Exception:
+        # Локальный запуск
         load_dotenv()
         return psycopg2.connect(
             host=os.getenv("DB_HOST"),
             port=os.getenv("DB_PORT"),
-            database=os.getenv("DB_NAME"),
+            dbname=os.getenv("DB_NAME"),
             user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD")
+            password=os.getenv("DB_PASSWORD"),
         )
 
 @st.cache_data(ttl=600)
