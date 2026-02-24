@@ -3,20 +3,19 @@ import psycopg2
 import pandas as pd
 import os
 from dotenv import load_dotenv
-@st.cache_resource
+
 @st.cache_resource
 def init_connection():
     try:
-        # Streamlit Cloud
         return psycopg2.connect(
             host=st.secrets["DB_HOST"],
             port=st.secrets["DB_PORT"],
             dbname=st.secrets["DB_NAME"],
             user=st.secrets["DB_USER"],
             password=st.secrets["DB_PASSWORD"],
+            connect_timeout=10,  # ← добавь это!
         )
     except Exception:
-        # Локальный запуск
         load_dotenv()
         return psycopg2.connect(
             host=os.getenv("DB_HOST"),
@@ -24,6 +23,7 @@ def init_connection():
             dbname=os.getenv("DB_NAME"),
             user=os.getenv("DB_USER"),
             password=os.getenv("DB_PASSWORD"),
+            connect_timeout=10,  # ← и сюда
         )
 
 @st.cache_data(ttl=600)
