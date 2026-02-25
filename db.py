@@ -13,7 +13,8 @@ def init_connection():
             dbname=st.secrets["DB_NAME"],
             user=st.secrets["DB_USER"],
             password=st.secrets["DB_PASSWORD"],
-            connect_timeout=10,  # ← добавь это!
+            connect_timeout=10,
+            sslmode="require"# ← добавь это!
         )
     except Exception:
         load_dotenv()
