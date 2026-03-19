@@ -36,15 +36,18 @@ with col2:
 with col3:
     diff = float(last['Мой портфель']) - float(last['Рынок'])
     sign = "+" if diff >= 0 else ""
-    status = "Обгоняю рынок 🚀" if diff >= 0 else "Отстаю от рынка 📉"
+    color = "green" if diff >= 0 else "red"
+    status = "обгоняю рынок 🚀" if diff >= 0 else "отстаю от рынка 📉"
 
     st.metric(
         label="⚡ Я vs Рынок",
         value=f"{sign}{diff:.2f}%",
-        delta=f"{sign}{diff:.2f}%",
-        delta_color="normal",
     )
-    st.caption(status)
+
+    st.markdown(
+        f"<span style='color:{color}; font-weight:600'>{status}</span>",
+        unsafe_allow_html=True
+    )
 
 st.plotly_chart(build_market_comparison(df_market), use_container_width=True)
 st.markdown("---")
