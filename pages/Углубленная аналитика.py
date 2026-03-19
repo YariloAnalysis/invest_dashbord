@@ -44,11 +44,6 @@ with col3:
         value=f"{sign}{diff:.2f}%",
     )
 
-    st.markdown(
-        f"<span style='color:{color}; font-weight:600'>{status}</span>",
-        unsafe_allow_html=True
-    )
-
 st.plotly_chart(build_market_comparison(df_market), use_container_width=True)
 st.markdown("---")
 
