@@ -110,29 +110,68 @@ def load_top_daily():
 def load_market_comparison():
     """Сравнение доходности портфеля и рынка (IMOEX) накопленным итогом"""
     return select('''
-        WITH ld AS (
-            SELECT
-                pm.date                    AS dt,
-                pm.expected_yield_percent  AS perc,
-                pm.imoex_points,
-                LEAD(pm.expected_yield_percent) OVER (ORDER BY pm.date) AS ld_portf,
-                LEAD(pm.imoex_points)           OVER (ORDER BY pm.date) AS ld_index
-            FROM portfolio_metrics pm
+        with per1 as (
+    select
+        o.date,
+        sum(o.payment) as sm
+    from operations o
+    where o.operation_type in (
+        'OperationType.OPERATION_TYPE_INPUT',
+        'OperationType.OPERATION_TYPE_OUTPUT',
+        'OperationType.OPERATION_TYPE_INP_MULTI'
+    )
+      and o.date >= '2026-01-22'
+    group by 1
+),
+per2 as (
+    select
+        date as end_date,
+        total_amount,
+        imoex_points,
+        lag(date) over (order by date) as start_date,
+        lag(total_amount) over (order by date) as lg_amount,
+        lag(imoex_points) over (order by date) as lg_point
+    from portfolio_metrics pm
+),
+per3 as (
+    select
+        pp.end_date,
+        pp.total_amount,
+        coalesce(sum(p.sm), 0) as cash_flow,
+        pp.imoex_points,
+        pp.lg_amount,
+        pp.lg_point
+    from per2 pp
+    left join per1 p
+        on p.date > pp.start_date
+       and p.date <= pp.end_date
+    where pp.lg_amount is not null
+      and pp.lg_point is not null
+    group by 1, 2, 4, 5, 6
+),
+per4 as (
+    select
+        end_date as date,
+        (total_amount - lg_amount - cash_flow) / nullif(lg_amount, 0) as portfolio_return,
+        (imoex_points - lg_point) / nullif(lg_point, 0) as market_return
+    from per3
+)
+select
+    date as dt,
+    round(
+        100 * (
+            exp(sum(ln(1 + portfolio_return)) over (order by date)) - 1
         ),
-        diff AS (
-            SELECT
-                dt,
-                ld_portf - perc                                          AS diff_my_portf,
-                ROUND((ld_index - imoex_points) / imoex_points * 100, 2) AS diff_market
-            FROM ld
-            WHERE ld_portf IS NOT NULL AND ld_index IS NOT NULL
-        )
-        SELECT
-            dt,
-            sum(diff_my_portf) OVER (ORDER BY dt) AS "Мой портфель",
-            sum(diff_market)   OVER (ORDER BY dt) AS "Рынок"
-        FROM diff
-        ORDER BY 1
+        2
+    ) as "Мой портфель",
+    round(
+        100 * (
+            exp(sum(ln(1 + market_return)) over (order by date)) - 1
+        ),
+        2
+    ) as "Рынок"
+from per4
+order by date;
     ''')
 @st.cache_data(ttl=3600)
 def load_monthly_returns():
