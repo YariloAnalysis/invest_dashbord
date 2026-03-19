@@ -54,6 +54,7 @@ def build_donut(df, label_col, value_col, colors, center_text):
     )
     return fig
 
+
 def build_portfolio_chart(df: pd.DataFrame, all_dates=None, forecast_extended=None):
     """
     Основной график портфеля:
