@@ -108,7 +108,7 @@ st.markdown("---")
 # ── График портфеля ──────────────────────────────────────────
 if st.session_state.show_chart:
     fig_portfolio = build_portfolio_chart(df, all_dates, forecast)
-    st.plotly_chart(fig_portfolio, use_container_width=True)
+    st.plotly_chart(fig_portfolio, use_container_width=False)
 
 # ── Детали доходности ────────────────────────────────────────
 if st.session_state.show_yield_details:
