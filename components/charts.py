@@ -178,112 +178,195 @@ def build_bar_assets(df: pd.DataFrame):
 def build_market_comparison(df):
     """
     График сравнения портфеля и рынка
-    df — из load_market_comparison()
+    df должен содержать:
+    - dt
+    - Мой портфель
+    - Рынок
     """
     df = df.copy()
-    df['Мой портфель'] = pd.to_numeric(df['Мой портфель'], errors='coerce')
-    df['Рынок']        = pd.to_numeric(df['Рынок'],        errors='coerce')
 
-    # Последние значения для аннотаций
-    last             = df.iloc[-1]
-    last_portf       = last['Мой портфель']
-    last_market      = last['Рынок']
-    portf_vs_market  = last_portf - last_market
+    df["dt"] = pd.to_datetime(df["dt"], errors="coerce")
+    df["Мой портфель"] = pd.to_numeric(df["Мой портфель"], errors="coerce")
+    df["Рынок"] = pd.to_numeric(df["Рынок"], errors="coerce")
 
-    # Цвет итоговой плашки
-    color_result = "#2DC653" if portf_vs_market >= 0 else "#E63946"
-    sign         = "+" if portf_vs_market >= 0 else ""
+    df = df.dropna(subset=["dt", "Мой портфель", "Рынок"]).sort_values("dt")
+
+    if df.empty:
+        fig = go.Figure()
+        fig.update_layout(title="Нет данных для отображения")
+        return fig
+
+    last = df.iloc[-1]
+    last_dt = last["dt"]
+    last_portf = last["Мой портфель"]
+    last_market = last["Рынок"]
+    portf_vs_market = last_portf - last_market
+
+    result_color = "#2DC653" if portf_vs_market >= 0 else "#E63946"
+    result_text = "Обгоняю рынок" if portf_vs_market >= 0 else "Отстаю от рынка"
+    sign = "+" if portf_vs_market >= 0 else ""
 
     fig = go.Figure()
 
-    # ── Мой портфель ────────────────────────────────────────
+    # Невидимая нижняя граница для заливки "лучше рынка"
     fig.add_trace(go.Scatter(
-        x    = df['dt'],
-        y    = df['Мой портфель'],
-        mode = 'lines',
-        name = 'Мой портфель',
-        line = dict(color='#1D3557', width=2.5),
-        fill = 'tonexty',
-        fillcolor = 'rgba(29, 53, 87, 0.07)',
-        hovertemplate = 'Дата: %{x}<br>Портфель: %{y:.2f}%<extra></extra>'
-    ))
-
-    # ── Рынок (IMOEX) ────────────────────────────────────────
-    fig.add_trace(go.Scatter(
-        x    = df['dt'],
-        y    = df['Рынок'],
-        mode = 'lines',
-        name = 'Рынок (IMOEX)',
-        line = dict(color='#F4A261', width=2.5, dash='dot'),
-        fill = 'tonexty',
-        fillcolor = 'rgba(244, 162, 97, 0.07)',
-        hovertemplate = 'Дата: %{x}<br>Рынок: %{y:.2f}%<extra></extra>'
-    ))
-    fig.add_trace(go.Scatter(
-        x=df['dt'],
-        y=df['Мой портфель'],
-        fill='tonexty',
-        fillcolor='rgba(45, 198, 83, 0.15)',
+        x=df["dt"],
+        y=df[["Мой портфель", "Рынок"]].min(axis=1),
+        mode="lines",
         line=dict(width=0),
         showlegend=False,
-        hoverinfo='skip',
+        hoverinfo="skip"
     ))
 
-    # ── Нулевая линия ────────────────────────────────────────
+    # Верхняя граница для зеленой заливки
+    fig.add_trace(go.Scatter(
+        x=df["dt"],
+        y=df[["Мой портфель", "Рынок"]].max(axis=1),
+        mode="lines",
+        fill="tonexty",
+        fillcolor="rgba(45, 198, 83, 0.10)",
+        line=dict(width=0),
+        showlegend=False,
+        hoverinfo="skip"
+    ))
+
+    # Линия портфеля
+    fig.add_trace(go.Scatter(
+        x=df["dt"],
+        y=df["Мой портфель"],
+        mode="lines",
+        name="Мой портфель",
+        line=dict(color="#1D3557", width=3),
+        hovertemplate="Дата: %{x|%d.%m.%Y}<br>Портфель: %{y:.2f}%<extra></extra>"
+    ))
+
+    # Линия рынка
+    fig.add_trace(go.Scatter(
+        x=df["dt"],
+        y=df["Рынок"],
+        mode="lines",
+        name="Рынок (IMOEX)",
+        line=dict(color="#F4A261", width=2.5, dash="dot"),
+        hovertemplate="Дата: %{x|%d.%m.%Y}<br>Рынок: %{y:.2f}%<extra></extra>"
+    ))
+
+    # Маркеры на последних точках
+    fig.add_trace(go.Scatter(
+        x=[last_dt],
+        y=[last_portf],
+        mode="markers",
+        marker=dict(size=9, color="#1D3557"),
+        name="Портфель (текущее)",
+        showlegend=False,
+        hovertemplate="Портфель: %{y:.2f}%<extra></extra>"
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=[last_dt],
+        y=[last_market],
+        mode="markers",
+        marker=dict(size=9, color="#F4A261"),
+        name="Рынок (текущее)",
+        showlegend=False,
+        hovertemplate="Рынок: %{y:.2f}%<extra></extra>"
+    ))
+
+    # Нулевая линия
     fig.add_hline(
-        y           = 0,
-        line_dash   = 'dash',
-        line_color  = '#CED4DA',
-        line_width  = 1,
+        y=0,
+        line_dash="dash",
+        line_color="#ADB5BD",
+        line_width=1
     )
 
-    # ── Аннотация итога ──────────────────────────────────────
+    # Подписи последних значений справа
     fig.add_annotation(
-        x         = df['dt'].iloc[-1],
-        y         = max(last_portf, last_market),
-        text      = f"<b>Разрыв: {sign}{portf_vs_market:.2f}%</b>",
-        showarrow = False,
-        font      = dict(size=13, color=color_result),
-        bgcolor   = "white",
-        bordercolor = color_result,
-        borderwidth = 1,
-        borderpad   = 6,
-        xanchor   = 'right',
+        x=last_dt,
+        y=last_portf,
+        text=f"<b>Портфель: {last_portf:.2f}%</b>",
+        showarrow=True,
+        arrowhead=0,
+        ax=60,
+        ay=0,
+        font=dict(size=12, color="#1D3557"),
+        bgcolor="rgba(255,255,255,0.9)",
+        bordercolor="#1D3557",
+        borderwidth=1
     )
 
-    # ── Layout ───────────────────────────────────────────────
+    fig.add_annotation(
+        x=last_dt,
+        y=last_market,
+        text=f"<b>Рынок: {last_market:.2f}%</b>",
+        showarrow=True,
+        arrowhead=0,
+        ax=60,
+        ay=0,
+        font=dict(size=12, color="#A85D1A"),
+        bgcolor="rgba(255,255,255,0.9)",
+        bordercolor="#F4A261",
+        borderwidth=1
+    )
+
+    # Итоговый бейдж
+    fig.add_annotation(
+        x=0.01,
+        y=1.12,
+        xref="paper",
+        yref="paper",
+        text=f"<b>{result_text}: {sign}{portf_vs_market:.2f} п.п.</b>",
+        showarrow=False,
+        font=dict(size=13, color=result_color),
+        bgcolor="rgba(255,255,255,0.95)",
+        bordercolor=result_color,
+        borderwidth=1,
+        borderpad=6,
+        xanchor="left"
+    )
+
     fig.update_layout(
-        title = dict(
-            text     = '📈 Мой портфель vs Рынок (IMOEX)',
-            x        = 0.5,
-            xanchor  = 'center',
-            font     = dict(size=16)
+        title=dict(
+            text="📈 Портфель vs рынок",
+            x=0.5,
+            xanchor="center",
+            font=dict(size=18)
         ),
-        plot_bgcolor  = '#F8F9FA',
-        paper_bgcolor = 'white',
-        font          = dict(family='Inter, sans-serif', size=13, color='#2B2D42'),
-        hovermode     = 'x unified',
-        height        = 500,
-        margin        = dict(l=60, r=60, t=80, b=60),
-        legend        = dict(
-            orientation = 'h',
-            yanchor     = 'bottom',
-            y           = 1.02,
-            xanchor     = 'right',
-            x           = 1,
+        height=540,
+        plot_bgcolor="#F8F9FA",
+        paper_bgcolor="white",
+        font=dict(
+            family="Inter, Arial, sans-serif",
+            size=13,
+            color="#2B2D42"
         ),
-        yaxis = dict(
-            title      = 'Накопленная доходность, %',
-            showgrid   = True,
-            gridcolor  = '#E9ECEF',
-            gridwidth  = 1,
-            ticksuffix = '%',
+        hovermode="x unified",
+        margin=dict(l=60, r=100, t=90, b=60),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
         ),
-        xaxis = dict(
-            showgrid  = False,
-            showline  = True,
-            linecolor = '#CED4DA',
+        xaxis=dict(
+            title="",
+            showgrid=False,
+            showline=True,
+            linecolor="#CED4DA",
+            showspikes=True,
+            spikemode="across",
+            spikecolor="#ADB5BD",
+            spikethickness=1,
+            tickformat="%d.%m.%y",
+            rangeslider=dict(visible=False)
         ),
+        yaxis=dict(
+            title="Накопленная доходность",
+            ticksuffix="%",
+            showgrid=True,
+            gridcolor="#E9ECEF",
+            zeroline=False
+        )
     )
 
     return fig
