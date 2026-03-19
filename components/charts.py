@@ -54,186 +54,88 @@ def build_donut(df, label_col, value_col, colors, center_text):
     )
     return fig
 
-
-def build_portfolio_chart(df: pd.DataFrame, all_dates=None, forecast_extended=None):
+def build_portfolio_chart(df: pd.DataFrame, all_dates, forecast_extended):
     """
-    Основной график портфеля:
-    - вложенные средства
-    - стоимость портфеля
-    - доходность, %
+    Основной график портфеля (Финтех-стиль)
+    df               — DataFrame из load_portfolio_metrics()
+    all_dates        — даты включая прогноз
+    forecast_extended — значения тренда включая прогноз
     """
+    # Так как мы убрали вторую ось (доходность), make_subplots больше не нужен.
+    # Используем базовый go.Figure()
+    fig = go.Figure()
 
-    df = df.copy()
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    df["fact_amount"] = pd.to_numeric(df["fact_amount"], errors="coerce")
-    df["total_amount"] = pd.to_numeric(df["total_amount"], errors="coerce")
-    df["expected_yield_percent"] = pd.to_numeric(df["expected_yield_percent"], errors="coerce")
+    # ── Цветовая палитра ─────────────────────────────────────
+    # Современные яркие цвета вместо серых тонов
+    color_invested = '#4361EE' # Яркий сине-фиолетовый
+    color_portfolio = '#10B981' # Сочный изумрудно-зеленый (ассоциация с ростом денег)
 
-    df = df.dropna(subset=["date", "fact_amount", "total_amount"]).sort_values("date")
-
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
-
-    # === Зона между вложенными и текущей стоимостью ===
-    lower = df[["fact_amount", "total_amount"]].min(axis=1)
-    upper = df[["fact_amount", "total_amount"]].max(axis=1)
-
+    # ── Зона 1 — Вложенные средства (Базовая линия) ──────────
     fig.add_trace(go.Scatter(
-        x=df["date"],
-        y=lower,
-        mode="lines",
-        line=dict(width=0),
-        showlegend=False,
-        hoverinfo="skip"
-    ), secondary_y=False)
+        x=df['date'],
+        y=df['fact_amount'],
+        name='Вложенные средства',
+        mode='lines',
+        line=dict(color=color_invested, width=3, shape='spline', smoothing=0.8),
+        fill='tozeroy', # Заливка до самого низа
+        fillcolor='rgba(67, 97, 238, 0.1)', # Очень легкая прозрачная заливка
+        hovertemplate='Вложено: %{y:,.0f} ₽<extra></extra>'
+    ))
 
+    # ── Зона 2 — Стоимость портфеля (Верхняя линия) ──────────
+    # Используем fill='tonexty', чтобы закрасить разницу (прибыль) между вложенным и текущим
     fig.add_trace(go.Scatter(
-        x=df["date"],
-        y=upper,
-        mode="lines",
-        fill="tonexty",
-        fillcolor="rgba(34, 197, 94, 0.10)",
-        line=dict(width=0),
-        showlegend=False,
-        hoverinfo="skip"
-    ), secondary_y=False)
+        x=df['date'],
+        y=df['total_amount'],
+        name='Стоимость портфеля',
+        mode='lines',
+        line=dict(color=color_portfolio, width=3, shape='spline', smoothing=0.8),
+        fill='tonexty', # Заливка пространства между вложенными средствами и текущей стоимостью
+        fillcolor='rgba(16, 185, 129, 0.15)', # Зеленоватая подсветка прибыли
+        hovertemplate='Стоимость: %{y:,.0f} ₽<extra></extra>'
+    ))
 
-    # === Вложенные средства ===
-    fig.add_trace(go.Scatter(
-        x=df["date"],
-        y=df["fact_amount"],
-        mode="lines+markers",
-        name="Вложено",
-        line=dict(color="#94A3B8", width=2, dash="dash"),
-        marker=dict(size=5, color="#94A3B8"),
-        hovertemplate="Дата: %{x|%d.%m.%Y}<br>Вложено: %{y:,.0f} ₽<extra></extra>"
-    ), secondary_y=False)
-
-    # === Стоимость портфеля ===
-    fig.add_trace(go.Scatter(
-        x=df["date"],
-        y=df["total_amount"],
-        mode="lines+markers",
-        name="Стоимость портфеля",
-        line=dict(color="#4361EE", width=3),
-        marker=dict(size=6, color="#4361EE"),
-        hovertemplate="Дата: %{x|%d.%m.%Y}<br>Стоимость: %{y:,.0f} ₽<extra></extra>"
-    ), secondary_y=False)
-
-    # === Доходность % ===
-    fig.add_trace(go.Scatter(
-        x=df["date"],
-        y=df["expected_yield_percent"],
-        mode="lines",
-        name="Доходность, %",
-        line=dict(color="#F59E0B", width=2.5, dash="dot"),
-        hovertemplate="Дата: %{x|%d.%m.%Y}<br>Доходность: %{y:.2f}%<extra></extra>"
-    ), secondary_y=True)
-
-    # === Последние точки выделим ===
-    last = df.iloc[-1]
-
-    fig.add_trace(go.Scatter(
-        x=[last["date"]],
-        y=[last["total_amount"]],
-        mode="markers",
-        marker=dict(size=10, color="#4361EE"),
-        showlegend=False,
-        hoverinfo="skip"
-    ), secondary_y=False)
-
-    fig.add_trace(go.Scatter(
-        x=[last["date"]],
-        y=[last["fact_amount"]],
-        mode="markers",
-        marker=dict(size=9, color="#94A3B8"),
-        showlegend=False,
-        hoverinfo="skip"
-    ), secondary_y=False)
-
-    # === Подписи последних значений ===
-    fig.add_annotation(
-        x=last["date"],
-        y=last["total_amount"],
-        text=f"<b>{last['total_amount']:,.0f} ₽</b>",
-        showarrow=True,
-        arrowhead=0,
-        ax=55,
-        ay=-20,
-        bgcolor="rgba(255,255,255,0.95)",
-        bordercolor="#4361EE",
-        borderwidth=1,
-        font=dict(color="#4361EE", size=12)
-    )
-
-    fig.add_annotation(
-        x=last["date"],
-        y=last["fact_amount"],
-        text=f"<b>{last['fact_amount']:,.0f} ₽</b>",
-        showarrow=True,
-        arrowhead=0,
-        ax=55,
-        ay=20,
-        bgcolor="rgba(255,255,255,0.95)",
-        bordercolor="#94A3B8",
-        borderwidth=1,
-        font=dict(color="#64748B", size=12)
-    )
-
-    # === Заголовок / layout ===
+    # ── Дизайн и Layout ──────────────────────────────────────
     fig.update_layout(
         title=dict(
-            text="💼 Портфель: вложено vs текущая стоимость",
-            x=0.5,
-            xanchor="center",
-            font=dict(size=18)
+            text='Процесс рождения деняк',
+            x=0.05, # Сместили заголовок влево (современный стиль)
+            font=dict(size=20, family='Inter, sans-serif', color='#1F2937')
         ),
-        height=560,
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        font=dict(
-            family="Inter, Arial, sans-serif",
-            size=13,
-            color="#1F2937"
-        ),
-        hovermode="x unified",
-        margin=dict(l=60, r=70, t=80, b=60),
+        plot_bgcolor='#FFFFFF', # Чистый белый фон для контраста
+        paper_bgcolor='#FFFFFF',
+        font=dict(family='Inter, sans-serif', size=13, color='#4B5563'),
+        hovermode='x unified', # Единое окно при наведении (сразу показывает обе суммы)
+        height=550,
+        margin=dict(l=20, r=20, t=80, b=40),
         legend=dict(
-            orientation="h",
-            yanchor="bottom",
+            orientation='h',
+            yanchor='bottom',
             y=1.02,
-            xanchor="right",
-            x=1
+            xanchor='right',
+            x=1,
+            bgcolor='rgba(255, 255, 255, 0)' # Прозрачный фон легенды
         )
     )
 
+    # ── Настройка осей ───────────────────────────────────────
     fig.update_xaxes(
-        type="date",
-        showgrid=False,
-        showline=True,
-        linecolor="#D1D5DB",
-        tickfont=dict(size=11),
-        tickformat="%d %b",
-        showspikes=True,
-        spikemode="across",
-        spikecolor="#CBD5E1",
-        spikethickness=1,
-        rangeslider=dict(visible=False)
+        type='date',
+        showgrid=False, # Убираем вертикальную сетку для чистоты
+        showline=False,
+        tickfont=dict(size=11, color='#9CA3AF'),
+        dtick="M1", # Шаг сетки (опционально, показывает месяцы)
     )
-
+    
     fig.update_yaxes(
-        title_text="Сумма, ₽",
+        title_text='', # Убрали надпись "Сумма", так как из контекста и так понятно
         showgrid=True,
-        gridcolor="#EEF2F7",
+        gridcolor='#F3F4F6', # Очень мягкая горизонтальная сетка
         gridwidth=1,
+        showline=False,
         zeroline=False,
-        secondary_y=False
-    )
-
-    fig.update_yaxes(
-        title_text="Доходность, %",
-        showgrid=False,
-        zeroline=False,
-        secondary_y=True
+        tickfont=dict(size=11, color='#9CA3AF'),
+        tickformat="~s", # Сокращает большие числа (например, 140k вместо 140000)
     )
 
     return fig
