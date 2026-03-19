@@ -54,97 +54,188 @@ def build_donut(df, label_col, value_col, colors, center_text):
     )
     return fig
 
+def build_portfolio_chart(df: pd.DataFrame, all_dates=None, forecast_extended=None):
+    """
+    Основной график портфеля:
+    - вложенные средства
+    - стоимость портфеля
+    - доходность, %
+    """
 
-def build_portfolio_chart(df: pd.DataFrame, all_dates, forecast_extended):
-    """
-    Основной график портфеля
-    df               — DataFrame из load_portfolio_metrics()
-    all_dates        — даты включая прогноз
-    forecast_extended — значения тренда включая прогноз
-    """
+    df = df.copy()
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df["fact_amount"] = pd.to_numeric(df["fact_amount"], errors="coerce")
+    df["total_amount"] = pd.to_numeric(df["total_amount"], errors="coerce")
+    df["expected_yield_percent"] = pd.to_numeric(df["expected_yield_percent"], errors="coerce")
+
+    df = df.dropna(subset=["date", "fact_amount", "total_amount"]).sort_values("date")
+
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    # ── Бары — вложенные средства ────────────────────────────
-    fig.add_trace(go.Bar(
-        x=df['date'],
-        y=df['fact_amount'],
-        name='Вложенные средства',
-        marker=dict(
-            color='rgba(29, 53, 87, 0.4)',
-            line=dict(color='#1D3557', width=1)
-        ),
+    # === Зона между вложенными и текущей стоимостью ===
+    lower = df[["fact_amount", "total_amount"]].min(axis=1)
+    upper = df[["fact_amount", "total_amount"]].max(axis=1)
+
+    fig.add_trace(go.Scatter(
+        x=df["date"],
+        y=lower,
+        mode="lines",
+        line=dict(width=0),
+        showlegend=False,
+        hoverinfo="skip"
     ), secondary_y=False)
 
-    # ── Линия — стоимость портфеля ───────────────────────────
     fig.add_trace(go.Scatter(
-        x=df['date'],
-        y=df['total_amount'],
-        mode='lines',
-        name='Стоимость портфеля',
-        fill='tozeroy',
-        fillcolor='rgba(29, 53, 87, 0.07)',
-        line=dict(color='#1D3557', width=2.5),
-        hovertemplate='Дата: %{x}<br>Стоимость: %{y:,.0f}<extra></extra>'
+        x=df["date"],
+        y=upper,
+        mode="lines",
+        fill="tonexty",
+        fillcolor="rgba(34, 197, 94, 0.10)",
+        line=dict(width=0),
+        showlegend=False,
+        hoverinfo="skip"
     ), secondary_y=False)
 
-    # ── Линия — доходность % ─────────────────────────────────
+    # === Вложенные средства ===
     fig.add_trace(go.Scatter(
-        x=df['date'],
-        y=df['expected_yield_percent'],
-        mode='lines+text',
-        name='Доходность, %',
-        line=dict(color='#F4A261', width=2, dash='dot'),
-        text=[f"{v:.1f}%" for v in df['expected_yield_percent']],
-        textposition='top center',
-        textfont=dict(size=10, color='#2B2D42', family='Inter Black, Inter, sans-serif'),
-        hovertemplate='Дата: %{x}<br>Доходность: %{y:.2f}%<extra></extra>'
+        x=df["date"],
+        y=df["fact_amount"],
+        mode="lines+markers",
+        name="Вложено",
+        line=dict(color="#94A3B8", width=2, dash="dash"),
+        marker=dict(size=5, color="#94A3B8"),
+        hovertemplate="Дата: %{x|%d.%m.%Y}<br>Вложено: %{y:,.0f} ₽<extra></extra>"
+    ), secondary_y=False)
+
+    # === Стоимость портфеля ===
+    fig.add_trace(go.Scatter(
+        x=df["date"],
+        y=df["total_amount"],
+        mode="lines+markers",
+        name="Стоимость портфеля",
+        line=dict(color="#4361EE", width=3),
+        marker=dict(size=6, color="#4361EE"),
+        hovertemplate="Дата: %{x|%d.%m.%Y}<br>Стоимость: %{y:,.0f} ₽<extra></extra>"
+    ), secondary_y=False)
+
+    # === Доходность % ===
+    fig.add_trace(go.Scatter(
+        x=df["date"],
+        y=df["expected_yield_percent"],
+        mode="lines",
+        name="Доходность, %",
+        line=dict(color="#F59E0B", width=2.5, dash="dot"),
+        hovertemplate="Дата: %{x|%d.%m.%Y}<br>Доходность: %{y:.2f}%<extra></extra>"
     ), secondary_y=True)
 
-    # ── Layout ───────────────────────────────────────────────
+    # === Последние точки выделим ===
+    last = df.iloc[-1]
+
+    fig.add_trace(go.Scatter(
+        x=[last["date"]],
+        y=[last["total_amount"]],
+        mode="markers",
+        marker=dict(size=10, color="#4361EE"),
+        showlegend=False,
+        hoverinfo="skip"
+    ), secondary_y=False)
+
+    fig.add_trace(go.Scatter(
+        x=[last["date"]],
+        y=[last["fact_amount"]],
+        mode="markers",
+        marker=dict(size=9, color="#94A3B8"),
+        showlegend=False,
+        hoverinfo="skip"
+    ), secondary_y=False)
+
+    # === Подписи последних значений ===
+    fig.add_annotation(
+        x=last["date"],
+        y=last["total_amount"],
+        text=f"<b>{last['total_amount']:,.0f} ₽</b>",
+        showarrow=True,
+        arrowhead=0,
+        ax=55,
+        ay=-20,
+        bgcolor="rgba(255,255,255,0.95)",
+        bordercolor="#4361EE",
+        borderwidth=1,
+        font=dict(color="#4361EE", size=12)
+    )
+
+    fig.add_annotation(
+        x=last["date"],
+        y=last["fact_amount"],
+        text=f"<b>{last['fact_amount']:,.0f} ₽</b>",
+        showarrow=True,
+        arrowhead=0,
+        ax=55,
+        ay=20,
+        bgcolor="rgba(255,255,255,0.95)",
+        bordercolor="#94A3B8",
+        borderwidth=1,
+        font=dict(color="#64748B", size=12)
+    )
+
+    # === Заголовок / layout ===
     fig.update_layout(
         title=dict(
-            text='Процесс рождения деняк',
+            text="💼 Портфель: вложено vs текущая стоимость",
             x=0.5,
-            xanchor='center'
+            xanchor="center",
+            font=dict(size=18)
         ),
-        plot_bgcolor='#F8F9FA',
-        paper_bgcolor='white',
-        font=dict(family='Inter, sans-serif', size=13, color='#2B2D42'),
-        hovermode='x unified',
-        barmode='group',
-        height=550,
-        margin=dict(l=60, r=60, t=80, b=60),
+        height=560,
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        font=dict(
+            family="Inter, Arial, sans-serif",
+            size=13,
+            color="#1F2937"
+        ),
+        hovermode="x unified",
+        margin=dict(l=60, r=70, t=80, b=60),
         legend=dict(
-            orientation='h',
-            yanchor='bottom',
+            orientation="h",
+            yanchor="bottom",
             y=1.02,
-            xanchor='right',
+            xanchor="right",
             x=1
         )
     )
 
     fig.update_xaxes(
-        type='date',
+        type="date",
         showgrid=False,
         showline=True,
-        linecolor='#CED4DA',
-        tickfont=dict(size=11)
+        linecolor="#D1D5DB",
+        tickfont=dict(size=11),
+        tickformat="%d %b",
+        showspikes=True,
+        spikemode="across",
+        spikecolor="#CBD5E1",
+        spikethickness=1,
+        rangeslider=dict(visible=False)
     )
+
     fig.update_yaxes(
-        title_text='Сумма (₽)',
+        title_text="Сумма, ₽",
         showgrid=True,
-        gridcolor='#E9ECEF',
+        gridcolor="#EEF2F7",
         gridwidth=1,
+        zeroline=False,
         secondary_y=False
     )
+
     fig.update_yaxes(
-        title_text='Доходность, %',
+        title_text="Доходность, %",
         showgrid=False,
+        zeroline=False,
         secondary_y=True
     )
 
     return fig
-
 @st.cache_data(ttl=3600)
 def build_bar_assets(df: pd.DataFrame):
     """
