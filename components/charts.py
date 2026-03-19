@@ -208,27 +208,7 @@ def build_market_comparison(df):
 
     fig = go.Figure()
 
-    # Невидимая нижняя граница для заливки "лучше рынка"
-    fig.add_trace(go.Scatter(
-        x=df["dt"],
-        y=df[["Мой портфель", "Рынок"]].min(axis=1),
-        mode="lines",
-        line=dict(width=0),
-        showlegend=False,
-        hoverinfo="skip"
-    ))
-
-    # Верхняя граница для зеленой заливки
-    fig.add_trace(go.Scatter(
-        x=df["dt"],
-        y=df[["Мой портфель", "Рынок"]].max(axis=1),
-        mode="lines",
-        fill="tonexty",
-        fillcolor="rgba(45, 198, 83, 0.10)",
-        line=dict(width=0),
-        showlegend=False,
-        hoverinfo="skip"
-    ))
+    
 
     # Линия портфеля
     fig.add_trace(go.Scatter(
