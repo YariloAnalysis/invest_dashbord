@@ -56,7 +56,7 @@ def load_portfolio_today():
         'proffit':        proffit,
         'return_today':   return_today,
         'delta_return':   delta_return,
-        'diff_total_amount' : diff_total_amount
+        'diff_total_amount' : diff_total_amount,
     }
 
 
