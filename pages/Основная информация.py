@@ -50,7 +50,7 @@ return_today   = metrics['return_today']
 delta_return   = metrics['delta_return']
 suma           = coupons['suma']
 coupon         = coupons['coupon']
-
+diff_total_amount = metrics['diff_total_amount']
 # ════════════════════════════════════════════════════════════
 # СТРАНИЦА
 # ════════════════════════════════════════════════════════════
@@ -63,7 +63,9 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.metric(
         label="💼 Стоимость портфеля",
-        value=f"{value_today:,.0f} ₽"
+        value=f"{value_today:,.0f} ₽",
+        delta=f"{diff_total_amount:+.2f}₽ к вчера",
+        delta_color="normal"
     )
     st.button(
         "🔼 Скрыть" if st.session_state.show_chart else "📉 Посмотреть в динамике",
