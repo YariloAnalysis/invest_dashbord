@@ -45,7 +45,7 @@ def load_portfolio_today():
     value_today    = today['total_amount']
     invested_today = today['fact_amount']
     proffit        = today['expected_yield']
-
+    diff_total_amount = today['total_amount'] - yesterday['total_amount']
     return_today     = (value_today / invested_today - 1) * 100
     return_yesterday = (yesterday['total_amount'] / yesterday['fact_amount'] - 1) * 100
     delta_return     = return_today - return_yesterday
@@ -56,6 +56,7 @@ def load_portfolio_today():
         'proffit':        proffit,
         'return_today':   return_today,
         'delta_return':   delta_return,
+        'diff_total_amount' : diff_total_amount
     }
 
 
