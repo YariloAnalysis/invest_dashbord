@@ -1,9 +1,12 @@
-# pages/1_Портфель.py
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
+from auth import require_auth, logout_button
+require_auth()
+logout_button()
+
 import pandas as pd
 
 from constants           import COLORS_TOP, COLORS_DETAIL, REVERSE_MAP
@@ -51,6 +54,7 @@ delta_return   = metrics['delta_return']
 suma           = coupons['suma']
 coupon         = coupons['coupon']
 diff_total_amount = metrics['diff_total_amount']
+
 # ════════════════════════════════════════════════════════════
 # СТРАНИЦА
 # ════════════════════════════════════════════════════════════
@@ -136,7 +140,6 @@ with col_donut:
     selected = st.session_state.selected_sector
 
     if selected is None:
-        # Верхний уровень
         total      = df_donut_top['По факту'].sum()
         color_list = [COLORS_TOP.get(n, '#CED4DA') for n in df_donut_top['Активы']]
 
@@ -163,7 +166,6 @@ with col_donut:
                     ),
                 )
     else:
-        # Детализация внутри категории
         instrument_type = REVERSE_MAP.get(selected)
         df_inner = df_donut_detail[
             df_donut_detail['instrument_type'] == instrument_type
