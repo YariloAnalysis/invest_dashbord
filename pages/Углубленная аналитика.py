@@ -157,4 +157,4 @@ with col2:
     sign = "+" if change_pct >= 0 else ""
     st.metric(f"📈 Изменение {PERIOD_LABEL[period]}", f"{sign}{change_pct:.2f}%")
 with col3:
-    st.metric(f"🔺 Макс {PERIOD_LABEL[period]}", f"{high_period:,.0f}
+    st.metric(f"🔺 Макс {PERIOD_LABEL[period]}", f"{high_period:,.0f}")
