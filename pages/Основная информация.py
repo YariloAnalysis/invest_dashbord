@@ -118,18 +118,11 @@ if st.session_state.show_chart:
 
 # ── Детали доходности ────────────────────────────────────────
 if st.session_state.show_yield_details:
-    # === ОТЛАДКА ===
-    st.write("🔍 DEBUG: Проверка значений перед render_coupon_metrics")
-    st.write(f"coupon = {coupon}")
-    st.write(f"suma = {suma}  (тип: {type(suma)})")
-    st.write(f"invested_today = {invested_today}")
-
-    if suma == 0 or suma is None:
-        st.error("suma действительно равна 0! Хотя ты ожидал другое.")
-    else:
-        st.success(f"suma = {suma} — всё нормально")
-
-
+    render_coupon_metrics(
+    coupon=coupon,
+    suma=suma,
+    invested_today=invested_today
+)
 
 # ── Детали по активам ────────────────────────────────────────
 if st.session_state.show_assets_details:
