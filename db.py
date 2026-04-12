@@ -82,7 +82,7 @@ def login(username: str, password: str) -> bool:
         response = requests.post(
             f"{api_url}/api/login",
             json={"username": username, "password": password},
-            timeout=10,
+            timeout=30,
         )
         if response.status_code == 200:
             data = response.json()
@@ -114,7 +114,7 @@ def register(username: str, email: str, password: str,
                 "broker_token": broker_token,
                 "account_id": account_id,
             },
-            timeout=10,
+            timeout=30,
         )
         if response.status_code == 200:
             data = response.json()
