@@ -158,3 +158,69 @@ with col2:
     st.metric(f"📈 Изменение {PERIOD_LABEL[period]}", f"{sign}{change_pct:.2f}%")
 with col3:
     st.metric(f"🔺 Макс {PERIOD_LABEL[period]}", f"{high_period:,.0f}")
+with col4:
+    st.metric(f"🔻 Мин {PERIOD_LABEL[period]}", f"{low_period:,.0f} ₽")
+
+# ── График ────────────────────────────────────────────────────
+st.plotly_chart(
+    build_candle_chart(df_full, df_display, active_ticker, period),
+    use_container_width=True,
+)
+st.markdown("---")
+
+# ════════════════════════════════════════════════════════════
+# БЛОК 4 — Монте-Карло
+# ════════════════════════════════════════════════════════════
+st.markdown("### 🎲 Моделирование Монте-Карло")
+
+col_conf, col_sim, _ = st.columns([2, 2, 4])
+with col_conf:
+    confidence = st.slider(
+        'Уровень доверия',
+        min_value = 0.90,
+        max_value = 0.99,
+        value     = 0.95,
+        step      = 0.01,
+        format    = '%.2f',
+    )
+with col_sim:
+    n_sim = st.select_slider(
+        'Симуляций',
+        options = [1000, 5000, 10000, 50000],
+        value   = 10000,
+    )
+
+fig_mc, var_val, last_price = build_monte_carlo(
+    figi,
+    active_ticker,
+    n_sim,
+    confidence,
+)
+
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric("💰 Текущая цена", f"{last_price:,.2f} ₽")
+with col2:
+    st.metric(
+        label       = f"⚠️ VaR {int(confidence*100)}%",
+        value       = f"{var_val:,.2f} ₽",
+        delta       = f"{var_val / last_price * 100:.2f}% от цены",
+        delta_color = "inverse",
+    )
+with col3:
+    risk_pct   = var_val / last_price
+    risk_label = (
+        "🟢 Низкий риск"  if risk_pct < 0.02 else
+        "🟡 Средний риск" if risk_pct < 0.04 else
+        "🔴 Высокий риск"
+    )
+    st.metric("🎯 Оценка риска", risk_label)
+
+st.plotly_chart(fig_mc, use_container_width=True)
+
+st.info(
+    f"📊 **Интерпретация:** С вероятностью **{int(confidence*100)}%** "
+    f"однодневный убыток по **{active_ticker}** не превысит "
+    f"**{var_val:,.2f} ₽** ({var_val / last_price * 100:.2f}% от текущей цены). "
+    f"Смоделировано **{n_sim:,}** сценариев."
+)
