@@ -385,7 +385,7 @@ with tab_optimize:
                         return ""
 
                     st.dataframe(
-                        rb_display.style.applymap(_color_action, subset=["Действие"]),
+                        rb_display.style.map(_color_action, subset=["Действие"]),
                         hide_index=True, use_container_width=True,
                     )
                 else:
