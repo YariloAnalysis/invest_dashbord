@@ -436,7 +436,7 @@ with tab_backtest:
         value=252,
         format_func=lambda x: f"{x // 21} мес." if x < 252 else f"{x // 252} г.",
     )
-        bt_rebal = col_b4.select_slider(
+    bt_rebal = col_b4.select_slider(
         "Ребалансировка",
         options=[5, 21, 63, 126, 252],
         value=21,
