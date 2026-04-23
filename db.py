@@ -133,3 +133,93 @@ def register(username: str, email: str, password: str,
     except Exception as e:
         st.error(f"Ошибка: {e}")
         return False
+# ============================================================
+#   Хелперы для Markowitz-страницы (возвращают сырой JSON/dict)
+# ============================================================
+
+def api_get_json(endpoint: str, params: dict = None, timeout: int = 30) -> dict:
+    """
+    GET к FastAPI. Возвращает сырой dict из JSON-ответа.
+    Используется для эндпоинтов со сложной структурой (не табличные данные).
+    """
+    token = get_token()
+    if not token:
+        st.error("🔒 Требуется авторизация")
+        st.stop()
+
+    api_url = get_api_url()
+
+    try:
+        response = requests.get(
+            f"{api_url}{endpoint}",
+            params=params or {},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=timeout,
+        )
+
+        if response.status_code == 401:
+            st.error("🔒 Сессия истекла — войдите заново")
+            for key in ["jwt_token", "authenticated", "username"]:
+                st.session_state.pop(key, None)
+            st.stop()
+
+        response.raise_for_status()
+        return response.json()
+
+    except requests.exceptions.ConnectionError:
+        st.error("❌ Не удалось подключиться к API. Запущен ли FastAPI?")
+        st.stop()
+    except requests.exceptions.HTTPError as e:
+        try:
+            detail = response.json()
+        except Exception:
+            detail = response.text
+        st.error(f"❌ API ошибка ({response.status_code}): {detail}")
+        return {}
+    except Exception as e:
+        st.error(f"❌ Ошибка: {e}")
+        return {}
+
+
+def api_post_json(endpoint: str, payload: dict = None, timeout: int = 120) -> dict:
+    """
+    POST к FastAPI с JSON-телом. Возвращает сырой dict.
+    Таймаут 120 секунд — для долгих операций (бэктест, оптимизация).
+    """
+    token = get_token()
+    if not token:
+        st.error("🔒 Требуется авторизация")
+        st.stop()
+
+    api_url = get_api_url()
+
+    try:
+        response = requests.post(
+            f"{api_url}{endpoint}",
+            json=payload or {},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=timeout,
+        )
+
+        if response.status_code == 401:
+            st.error("🔒 Сессия истекла — войдите заново")
+            for key in ["jwt_token", "authenticated", "username"]:
+                st.session_state.pop(key, None)
+            st.stop()
+
+        response.raise_for_status()
+        return response.json()
+
+    except requests.exceptions.ConnectionError:
+        st.error("❌ Не удалось подключиться к API. Запущен ли FastAPI?")
+        st.stop()
+    except requests.exceptions.HTTPError:
+        try:
+            detail = response.json()
+        except Exception:
+            detail = response.text
+        st.error(f"❌ API ошибка ({response.status_code}): {detail}")
+        return {}
+    except Exception as e:
+        st.error(f"❌ Ошибка: {e}")
+        return {}
