@@ -1,10 +1,12 @@
-# streamlit_app/pages/5_📈_Оптимизация_портфеля.py
+# pages/5_📈_Оптимизация_портфеля.py
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-from utils.api import api_get, api_post
+
+# ← ВАШ модуль из корня проекта
+from db import api_get_json, api_post_json
 
 # ============================================================
 #                      КОНФИГУРАЦИЯ СТРАНИЦЫ
@@ -15,13 +17,13 @@ st.set_page_config(
     layout="wide",
 )
 
-# Проверка авторизации
-if not st.session_state.get("access_token"):
-    st.warning("🔐 Пожалуйста, войдите в систему.")
+# Проверка авторизации (у вас ключ — jwt_token + authenticated)
+if not st.session_state.get("authenticated") or not st.session_state.get("jwt_token"):
+    st.warning("🔐 Пожалуйста, войдите в систему на главной странице.")
     st.stop()
 
 st.title("📈 Оптимизация портфеля — Markowitz")
-st.caption("Современная портфельная теория Марковица: найдите оптимальное соотношение риск/доходность")
+st.caption("Современная портфельная теория: найдите оптимальное соотношение риск/доходность")
 
 # ============================================================
 #                     САЙДБАР — ПАРАМЕТРЫ
@@ -41,7 +43,7 @@ with st.sidebar:
         "Безрисковая ставка (год)",
         min_value=0.0, max_value=0.30, value=0.16, step=0.005,
         format="%.3f",
-        help="Ставка ОФЗ / ключевая ставка ЦБ. Используется для расчёта коэффициента Шарпа",
+        help="Ставка ОФЗ / ключевая ставка ЦБ. Для расчёта Sharpe",
     )
 
     st.divider()
@@ -50,11 +52,10 @@ with st.sidebar:
     col_a, col_b = st.columns(2)
     min_weight = col_a.number_input(
         "Мин. вес", 0.0, 0.5, 0.0, 0.01, format="%.2f",
-        help="Минимальная доля одного актива",
     )
     max_weight = col_b.number_input(
         "Макс. вес", 0.05, 1.0, 0.40, 0.05, format="%.2f",
-        help="Максимальная доля одного актива (защита от концентрации)",
+        help="Защита от концентрации в одной бумаге",
     )
 
     constraints = {"min_weight": min_weight, "max_weight": max_weight}
@@ -62,7 +63,7 @@ with st.sidebar:
 # ============================================================
 #                       СВОДКА ПОРТФЕЛЯ
 # ============================================================
-summary = api_get("/api/optimization/portfolio_summary")
+summary = api_get_json("/api/optimization/portfolio_summary")
 
 if not summary or summary.get("n_assets", 0) < 2:
     st.error("❌ В вашем портфеле меньше 2 бумаг (акции/облигации/ETF) — оптимизация невозможна.")
@@ -70,7 +71,7 @@ if not summary or summary.get("n_assets", 0) < 2:
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("💰 Стоимость портфеля", f"{summary['total_value']:,.0f} ₽".replace(",", " "))
-col2.metric("📊 Активов в портфеле", summary["n_assets"])
+col2.metric("📊 Активов", summary["n_assets"])
 
 by_type = summary.get("by_type", {})
 shares_val = by_type.get("share", 0)
@@ -97,20 +98,20 @@ tab_frontier, tab_optimize, tab_backtest, tab_corr, tab_positions = st.tabs([
 with tab_frontier:
     st.subheader("Эффективная граница Марковица")
     st.caption(
-        "Каждая точка — возможный портфель. Линия сверху — портфели "
-        "с максимальной доходностью при заданном риске. Звёзды — ключевые точки."
+        "Каждая точка — возможный портфель. Линия сверху — оптимальные. "
+        "Звёзды — ключевые точки (max Sharpe, min variance, ваш текущий)."
     )
 
     col_f1, col_f2, col_f3 = st.columns([1, 1, 1])
     n_points = col_f1.slider("Точек на границе", 20, 80, 40, 5)
     n_random = col_f2.slider("Случайных портфелей (фон)", 0, 5000, 2000, 500)
-    go_btn = col_f3.button("🚀 Построить", type="primary", use_container_width=True,
-                            key="frontier_btn")
+    go_btn = col_f3.button("🚀 Построить", type="primary",
+                            use_container_width=True, key="frontier_btn")
 
     if go_btn or "frontier_data" in st.session_state:
         if go_btn:
             with st.spinner("Строим эффективную границу..."):
-                data = api_post("/api/optimization/efficient_frontier", {
+                data = api_post_json("/api/optimization/efficient_frontier", {
                     "lookback_days": lookback_days,
                     "n_points": n_points,
                     "n_random": n_random,
@@ -127,7 +128,6 @@ with tab_frontier:
             # ========== ГРАФИК ==========
             fig = go.Figure()
 
-            # облако случайных портфелей
             if data.get("random_portfolios"):
                 rp = pd.DataFrame(data["random_portfolios"])
                 fig.add_trace(go.Scatter(
@@ -146,7 +146,6 @@ with tab_frontier:
                     hovertemplate="σ: %{x:.2f}%<br>μ: %{y:.2f}%<extra></extra>",
                 ))
 
-            # эффективная граница
             if data.get("frontier"):
                 fr = pd.DataFrame(data["frontier"])
                 fig.add_trace(go.Scatter(
@@ -156,11 +155,10 @@ with tab_frontier:
                     line=dict(color="#FF4B4B", width=3),
                     marker=dict(size=6, color="#FF4B4B"),
                     name="Эффективная граница",
-                    hovertemplate="σ: %{x:.2f}%<br>μ: %{y:.2f}%<br>Sharpe: %{customdata:.2f}<extra></extra>",
                     customdata=fr["sharpe"],
+                    hovertemplate="σ: %{x:.2f}%<br>μ: %{y:.2f}%<br>Sharpe: %{customdata:.2f}<extra></extra>",
                 ))
 
-            # ключевые точки: max sharpe, min var, текущий
             def _add_point(portfolio, name, color, symbol):
                 if not portfolio or "expected_return" not in portfolio:
                     return
@@ -190,7 +188,7 @@ with tab_frontier:
             )
             st.plotly_chart(fig, use_container_width=True)
 
-            # ========== МЕТРИКИ ==========
+            # ========== СРАВНЕНИЕ ==========
             st.subheader("📊 Сравнение портфелей")
 
             comparison = []
@@ -207,9 +205,10 @@ with tab_frontier:
                         "Волатильность": f"{p['volatility'] * 100:.2f}%",
                         "Sharpe": f"{p['sharpe']:.3f}",
                     })
-            st.dataframe(pd.DataFrame(comparison), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(comparison), hide_index=True,
+                         use_container_width=True)
 
-            # ========== СОСТАВ ОПТИМАЛЬНОГО ==========
+            # ========== СОСТАВ MAX SHARPE ==========
             ms = data.get("max_sharpe", {})
             if ms.get("weights_detail"):
                 st.subheader("🎯 Состав портфеля Max Sharpe")
@@ -220,19 +219,18 @@ with tab_frontier:
                 with col_pie:
                     fig_pie = px.pie(
                         wd, values="weight_pct", names="ticker",
-                        hole=0.4,
-                        title="Распределение весов",
+                        hole=0.4, title="Распределение весов",
                     )
-                    fig_pie.update_traces(textposition="inside", textinfo="percent+label")
+                    fig_pie.update_traces(textposition="inside",
+                                          textinfo="percent+label")
                     st.plotly_chart(fig_pie, use_container_width=True)
 
                 with col_tbl:
                     display_df = wd[["ticker", "name", "weight_pct"]].copy()
                     display_df.columns = ["Тикер", "Название", "Вес, %"]
                     display_df["Вес, %"] = display_df["Вес, %"].round(2)
-                    st.dataframe(display_df, hide_index=True, use_container_width=True,
-                                 height=400)
-
+                    st.dataframe(display_df, hide_index=True,
+                                 use_container_width=True, height=400)
     else:
         st.info("👆 Нажмите «Построить», чтобы увидеть эффективную границу")
 
@@ -241,21 +239,18 @@ with tab_frontier:
 # ============================================================
 with tab_optimize:
     st.subheader("Оптимизация под стратегию")
-    st.caption("Выберите стратегию — система рассчитает целевые веса и план ребалансировки")
+    st.caption("Система рассчитает целевые веса и план ребалансировки")
 
     col_s1, col_s2 = st.columns([2, 1])
     with col_s1:
         strategy = st.selectbox(
             "Стратегия",
             options=[
-                "max_sharpe",
-                "min_variance",
-                "risk_parity",
-                "target_return",
-                "target_volatility",
+                "max_sharpe", "min_variance", "risk_parity",
+                "target_return", "target_volatility",
             ],
             format_func=lambda x: {
-                "max_sharpe": "⭐ Max Sharpe — максимум отношения доходность/риск",
+                "max_sharpe": "⭐ Max Sharpe — максимум доходность/риск",
                 "min_variance": "🛡️ Min Variance — минимум волатильности",
                 "risk_parity": "⚖️ Risk Parity — равный риск на актив",
                 "target_return": "🎯 Target Return — целевая доходность",
@@ -287,19 +282,18 @@ with tab_optimize:
             if target_value is not None:
                 payload["target_value"] = target_value
 
-            result = api_post("/api/optimization/optimize", payload)
+            result = api_post_json("/api/optimization/optimize", payload)
             st.session_state["optimize_result"] = result
 
     if "optimize_result" in st.session_state:
         result = st.session_state["optimize_result"]
-        if "error" in result:
-            st.error(result["error"])
+        if not result or "error" in result:
+            st.error(result.get("error", "Ошибка оптимизации"))
         else:
             optimal = result["optimal"]
             current = result["current"]
             improvement = result["improvement"]
 
-            # ========== СРАВНИТЕЛЬНЫЕ МЕТРИКИ ==========
             st.markdown("### 📊 Текущий vs Оптимальный")
             m1, m2, m3 = st.columns(3)
             m1.metric(
@@ -311,7 +305,7 @@ with tab_optimize:
                 "Волатильность",
                 f"{optimal['volatility'] * 100:.2f}%",
                 f"{improvement['volatility_delta'] * 100:+.2f} п.п.",
-                delta_color="inverse",  # меньше волатильность = лучше
+                delta_color="inverse",
             )
             m3.metric(
                 "Sharpe Ratio",
@@ -319,13 +313,11 @@ with tab_optimize:
                 f"{improvement['sharpe_delta']:+.3f}",
             )
 
-            # ========== ВЕСА: ТЕКУЩИЙ ↔ ЦЕЛЕВОЙ ==========
+            # ========== ВЕСА ==========
             st.markdown("### 🎯 Распределение весов")
-
             cur_wd = pd.DataFrame(current["weights_detail"])
             opt_wd = pd.DataFrame(optimal["weights_detail"])
 
-            # объединяем в общую таблицу
             all_tickers = set(cur_wd["ticker"]) | set(opt_wd["ticker"])
             merged = []
             for t in all_tickers:
@@ -340,18 +332,12 @@ with tab_optimize:
 
             fig_bars = go.Figure()
             fig_bars.add_trace(go.Bar(
-                y=merged_df["ticker"],
-                x=merged_df["current"] * 100,
-                name="Текущий",
-                orientation="h",
-                marker_color="#888",
+                y=merged_df["ticker"], x=merged_df["current"] * 100,
+                name="Текущий", orientation="h", marker_color="#888",
             ))
             fig_bars.add_trace(go.Bar(
-                y=merged_df["ticker"],
-                x=merged_df["target"] * 100,
-                name="Целевой",
-                orientation="h",
-                marker_color="#FF4B4B",
+                y=merged_df["ticker"], x=merged_df["target"] * 100,
+                name="Целевой", orientation="h", marker_color="#FF4B4B",
             ))
             fig_bars.update_layout(
                 barmode="group",
@@ -362,13 +348,11 @@ with tab_optimize:
             )
             st.plotly_chart(fig_bars, use_container_width=True)
 
-            # ========== ПЛАН РЕБАЛАНСИРОВКИ ==========
+            # ========== РЕБАЛАНСИРОВКА ==========
             st.markdown("### 💼 План ребалансировки")
-
             rebalancing = result.get("rebalancing", [])
             if rebalancing:
                 rb_df = pd.DataFrame(rebalancing)
-                # фильтруем HOLD для краткости
                 rb_actions = rb_df[rb_df["action"] != "HOLD"].copy()
 
                 if len(rb_actions):
@@ -380,21 +364,19 @@ with tab_optimize:
                     rb2.metric("🔴 Продать на", f"{sell_total:,.0f} ₽".replace(",", " "))
                     rb3.metric("Всего операций", len(rb_actions))
 
-                    # таблица
                     rb_display = rb_actions[[
                         "action", "ticker", "name",
-                        "current_weight", "target_weight", "delta", "amount_rub"
+                        "current_weight", "target_weight", "delta", "amount_rub",
                     ]].copy()
                     rb_display.columns = [
                         "Действие", "Тикер", "Название",
-                        "Текущий вес", "Целевой вес", "Δ", "Сумма, ₽"
+                        "Тек. вес", "Цель", "Δ", "Сумма, ₽",
                     ]
-                    rb_display["Текущий вес"] = (rb_display["Текущий вес"] * 100).round(2).astype(str) + "%"
-                    rb_display["Целевой вес"] = (rb_display["Целевой вес"] * 100).round(2).astype(str) + "%"
+                    rb_display["Тек. вес"] = (rb_display["Тек. вес"] * 100).round(2).astype(str) + "%"
+                    rb_display["Цель"] = (rb_display["Цель"] * 100).round(2).astype(str) + "%"
                     rb_display["Δ"] = (rb_display["Δ"] * 100).round(2).astype(str) + " п.п."
                     rb_display["Сумма, ₽"] = rb_display["Сумма, ₽"].round(0).astype(int)
 
-                    # раскрашиваем
                     def _color_action(val):
                         if val == "BUY":
                             return "background-color: #d4edda; color: #155724; font-weight: bold"
@@ -407,7 +389,7 @@ with tab_optimize:
                         hide_index=True, use_container_width=True,
                     )
                 else:
-                    st.success("✅ Ваш портфель уже близок к оптимальному — ребалансировка не требуется")
+                    st.success("✅ Портфель уже близок к оптимальному")
 
 # ============================================================
 #                    ВКЛАДКА 3: БЭКТЕСТ
@@ -415,24 +397,29 @@ with tab_optimize:
 with tab_backtest:
     st.subheader("Walk-forward бэктест")
     st.caption(
-        "Симулируем, как стратегия показала бы себя в прошлом. "
-        "Периодически ребалансируем портфель на новых данных и сравниваем с вашим текущим распределением и IMOEX."
+        "Симулируем стратегию на исторических данных. "
+        "Обучаемся на N днях, держим M дней, переобучаемся — и так до конца."
     )
 
     col_b1, col_b2, col_b3, col_b4 = st.columns(4)
     bt_strategy = col_b1.selectbox(
-        "Стратегия", ["max_sharpe", "min_variance", "risk_parity"],
-        format_func=lambda x: {"max_sharpe": "Max Sharpe",
-                                "min_variance": "Min Variance",
-                                "risk_parity": "Risk Parity"}[x],
+        "Стратегия",
+        ["max_sharpe", "min_variance", "risk_parity"],
+        format_func=lambda x: {
+            "max_sharpe": "Max Sharpe",
+            "min_variance": "Min Variance",
+            "risk_parity": "Risk Parity",
+        }[x],
     )
     bt_lookback = col_b2.select_slider(
-        "Период теста", [730, 1095, 1825, 2555, 3650],
+        "Период теста",
+        options=[730, 1095, 1825, 2555, 3650],
         value=1095,
-        format_func=lambda x: f"{x // 365} года" if x < 1825 else f"{x // 365} лет",
+        format_func=lambda x: f"{x // 365} г.",
     )
     bt_train = col_b3.select_slider(
-        "Окно обучения", [126, 252, 378, 504, 756],
+        "Окно обучения",
+        options=[126, 252, 378, 504, 756],
         value=252,
         format_func=lambda x: f"{x // 21} мес." if x < 252 else f"{x // 252} г.",
     )
@@ -450,8 +437,8 @@ with tab_backtest:
     )
 
     if st.button("🚀 Запустить бэктест", type="primary", key="backtest_btn"):
-        with st.spinner("Запускаем бэктест... (может занять 10-30 секунд)"):
-            result = api_post("/api/optimization/backtest", {
+        with st.spinner("Запускаем бэктест... (10-30 сек.)"):
+            result = api_post_json("/api/optimization/backtest", {
                 "strategy": bt_strategy,
                 "lookback_days": bt_lookback,
                 "train_window": bt_train,
@@ -464,12 +451,12 @@ with tab_backtest:
     if "backtest_result" in st.session_state:
         result = st.session_state["backtest_result"]
 
-        if "error" in result:
-            st.error(result["error"])
+        if not result or "error" in result:
+            st.error(result.get("error", "Ошибка бэктеста"))
         elif not result.get("equity_curve"):
             st.warning("Бэктест не вернул данных — проверьте параметры")
         else:
-            # ========== ГРАФИК КАПИТАЛА ==========
+            # ========== КРИВАЯ КАПИТАЛА ==========
             eq_df = pd.DataFrame(result["equity_curve"])
             eq_df["date"] = pd.to_datetime(eq_df["date"])
 
@@ -528,10 +515,11 @@ with tab_backtest:
                     "Max Drawdown": f"{m.get('max_drawdown', 0) * 100:.2f}%",
                 })
 
-            metrics_df = pd.DataFrame(rows)
-            st.dataframe(metrics_df, hide_index=True, use_container_width=True)
+            if rows:
+                st.dataframe(pd.DataFrame(rows), hide_index=True,
+                             use_container_width=True)
 
-            # ========== DRAWDOWN ==========
+            # ========== ПРОСАДКИ ==========
             st.markdown("### 📉 Просадки")
 
             def _compute_drawdown(series: pd.Series) -> pd.Series:
@@ -575,8 +563,10 @@ with tab_backtest:
                     for i, entry in enumerate(rebal_log, 1):
                         weights_str = ", ".join(
                             f"{k}: {v * 100:.1f}%"
-                            for k, v in sorted(entry["weights"].items(),
-                                                key=lambda x: -x[1])[:5]
+                            for k, v in sorted(
+                                entry["weights"].items(),
+                                key=lambda x: -x[1],
+                            )[:5]
                         )
                         st.markdown(
                             f"**#{i} — {entry['date']}** · топ-5: {weights_str}"
@@ -591,21 +581,23 @@ with tab_corr:
     st.subheader("Матрица корреляций")
     st.caption(
         "Показывает, насколько похоже движутся бумаги. "
-        "Чем ближе к 1 (красный) — тем сильнее вместе растут/падают. "
-        "Близкие к 0 и отрицательные (синий) — дают эффект диверсификации."
+        "Красный (→1) — вместе растут/падают. "
+        "Синий (→-1 или 0) — дают эффект диверсификации."
     )
 
     if st.button("🔍 Рассчитать корреляции", type="primary", key="corr_btn"):
         with st.spinner("Считаем..."):
-            corr_data = api_get("/api/optimization/correlation",
-                                params={"lookback_days": lookback_days})
+            corr_data = api_get_json(
+                "/api/optimization/correlation",
+                params={"lookback_days": lookback_days},
+            )
             st.session_state["corr_data"] = corr_data
 
     if "corr_data" in st.session_state:
         corr_data = st.session_state["corr_data"]
 
-        if "error" in corr_data:
-            st.error(corr_data["error"])
+        if not corr_data or "error" in corr_data:
+            st.error(corr_data.get("error", "Ошибка"))
         else:
             tickers = corr_data["tickers"]
             matrix = np.array(corr_data["matrix"])
@@ -618,7 +610,7 @@ with tab_corr:
                 text=np.round(matrix, 2),
                 texttemplate="%{text}",
                 textfont=dict(size=10),
-                hovertemplate="%{y} ↔ %{x}<br>Корреляция: %{z:.3f}<extra></extra>",
+                hovertemplate="%{y} ↔ %{x}<br>ρ = %{z:.3f}<extra></extra>",
                 colorbar=dict(title="ρ"),
             ))
             fig_corr.update_layout(
@@ -630,7 +622,6 @@ with tab_corr:
             st.plotly_chart(fig_corr, use_container_width=True)
 
             # ========== ИНСАЙТЫ ==========
-            # Ищем самые скоррелированные и самые диверсифицирующие пары
             pairs = []
             for i in range(len(tickers)):
                 for j in range(i + 1, len(tickers)):
@@ -641,11 +632,11 @@ with tab_corr:
                     })
             pairs_df = pd.DataFrame(pairs)
 
-            if len(pairs_df) > 0:
+            if len(pairs_df):
                 col_i1, col_i2 = st.columns(2)
 
                 with col_i1:
-                    st.markdown("#### 🔴 Самые похожие пары (высокая корреляция)")
+                    st.markdown("#### 🔴 Самые похожие пары")
                     top_corr = pairs_df.nlargest(5, "corr").copy()
                     top_corr["Корреляция"] = top_corr["corr"].round(3)
                     st.dataframe(
@@ -654,7 +645,7 @@ with tab_corr:
                     )
 
                 with col_i2:
-                    st.markdown("#### 🟢 Лучшая диверсификация (низкая корреляция)")
+                    st.markdown("#### 🟢 Лучшая диверсификация")
                     low_corr = pairs_df.nsmallest(5, "corr").copy()
                     low_corr["Корреляция"] = low_corr["corr"].round(3)
                     st.dataframe(
@@ -679,7 +670,6 @@ with tab_positions:
         col_chart, col_stats = st.columns([2, 1])
 
         with col_chart:
-            # treemap по стоимости, с группировкой по типу
             fig_tree = px.treemap(
                 pos_df,
                 path=["instrument_type", "ticker"],
@@ -694,7 +684,6 @@ with tab_positions:
 
         with col_stats:
             st.markdown("#### Структура по типам")
-            by_type = summary.get("by_type", {})
             type_names = {
                 "share": "📈 Акции",
                 "bond": "📜 Облигации",
@@ -709,18 +698,19 @@ with tab_positions:
                     f"{pct:.1f}% портфеля",
                 )
 
-        # таблица с деталями
         st.markdown("#### Полный список позиций")
         display_pos = pos_df.copy()
         display_pos["weight_pct"] = (display_pos["weight"] * 100).round(2)
         display_pos["value"] = display_pos["value"].round(0).astype(int)
 
         display_pos = display_pos[[
-            "ticker", "name", "instrument_type", "value", "weight_pct"
+            "ticker", "name", "instrument_type", "value", "weight_pct",
         ]]
         display_pos.columns = ["Тикер", "Название", "Тип", "Стоимость, ₽", "Вес, %"]
         display_pos["Тип"] = display_pos["Тип"].map({
-            "share": "Акция", "bond": "Облигация", "etf": "ETF",
+            "share": "Акция",
+            "bond": "Облигация",
+            "etf": "ETF",
         }).fillna(display_pos["Тип"])
 
         st.dataframe(display_pos, hide_index=True, use_container_width=True)
@@ -731,19 +721,19 @@ with tab_positions:
 st.divider()
 with st.expander("ℹ️ Как это работает"):
     st.markdown("""
-    **Теория Марковица (1952, Нобелевская премия 1990)** — основа современного инвестирования.
+    **Теория Марковица (1952, Нобелевская премия 1990)** — фундамент современного инвестирования.
 
-    - **Эффективная граница** — множество портфелей, дающих максимальную доходность при каждом уровне риска.
-    - **Max Sharpe** — портфель с лучшим соотношением «доходность / риск» (касательный к границе из точки безрисковой ставки).
-    - **Min Variance** — портфель с минимальной волатильностью.
-    - **Risk Parity** — равный вклад каждого актива в общий риск (веса обратно пропорциональны волатильности).
+    - **Эффективная граница** — множество портфелей с максимальной доходностью при каждом уровне риска.
+    - **Max Sharpe** — лучшее соотношение «доходность / риск» (касательный портфель).
+    - **Min Variance** — минимум волатильности.
+    - **Risk Parity** — равный вклад каждого актива в общий риск портфеля.
 
-    **Ограничения по весам** защищают от концентрации: установите `max_weight = 0.3`, чтобы ни одна бумага не заняла больше 30%.
+    **Ограничения** защищают от концентрации: `max_weight = 0.3` → ни одна бумага не займёт больше 30%.
 
     **Walk-forward бэктест** честно симулирует прошлое:
     1. Обучаемся на первых N днях
     2. Держим портфель M дней
-    3. Переобучаемся на следующих N днях — и так до конца истории
+    3. Переобучаемся на новых данных — и так до конца
 
     Это защищает от *lookahead bias* (заглядывания в будущее).
 
