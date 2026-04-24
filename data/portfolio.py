@@ -70,16 +70,20 @@ def load_bar_money():
 
 @st.cache_data(ttl=3600)
 def load_coupon_metrics():
-    """Купонная доходность"""
+    """Купонная доходность и данные для календаря выплат"""
     suma_per   = api_get("/api/portfolio/coupon_suma")
     coupon_per = api_get("/api/portfolio/coupon_amount")
     df_coupons = api_get("/api/portfolio/coupon_list")
 
     suma_val   = float(suma_per.iloc[0, 0])   if not suma_per.empty   else 0.0
-    coupon_val = float(coupon_per.iloc[0, 0])  if not coupon_per.empty else 0.0
+    coupon_val = float(coupon_per.iloc[0, 0]) if not coupon_per.empty else 0.0
+
+    
+    if not df_coupons.empty and 'payment_date' in df_coupons.columns:
+        df_coupons['payment_date'] = pd.to_datetime(df_coupons['payment_date'])
 
     return {
         'suma':       suma_val,
         'coupon':     coupon_val,
-        'df_coupons': df_coupons,
+        'df_coupons': df_coupons, # <-- Эти данные мы будем использовать для графика
     }
