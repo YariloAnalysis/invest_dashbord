@@ -616,3 +616,61 @@ def build_monte_carlo(figi: str,          # ← принимаем figi
     )
 
     return fig, var_value, last_price
+
+def build_payment_calendar(df: pd.DataFrame):
+    if df.empty:
+        return None
+
+    # Словарь для красивого отображения месяцев на русском
+    months_ru = {
+        '01': 'Янв', '02': 'Фев', '03': 'Мар', '04': 'Апр',
+        '05': 'Май', '06': 'Июн', '07': 'Июл', '08': 'Авг',
+        '09': 'Сен', '10': 'Окт', '11': 'Ноя', '12': 'Дек'
+    }
+
+    # Подготовка данных
+    df = df.copy()
+    df['year_month'] = df['payment_date'].dt.strftime('%Y-%m')
+    df['month_num'] = df['payment_date'].dt.strftime('%m')
+    df['month_name'] = df['month_num'].map(months_ru) + ' ' + df['payment_date'].dt.strftime('%Y')
+
+    # Группируем по месяцу и активу
+    df_grouped = df.groupby(['year_month', 'month_name', 'name'])['amount'].sum().reset_index()
+    df_grouped = df_grouped.sort_values('year_month') # Сортируем хронологически
+
+    # Строим график
+    fig = px.bar(
+        df_grouped,
+        x="month_name",
+        y="amount",
+        color="name",
+        text_auto='.0f', # Показывать суммы округленно до целых
+        labels={
+            "month_name": "",
+            "amount": "Сумма (₽)",
+            "name": "Активы"
+        }
+    )
+
+    # Наводим красоту (прозрачный фон, легенда внизу, чтобы не съедала место)
+    fig.update_layout(
+        barmode='stack',
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        hovermode="x unified",
+        margin=dict(l=0, r=0, t=10, b=0),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.3,
+            xanchor="center",
+            x=0.5,
+            title_text=""
+        ),
+        yaxis=(dict(showgrid=True, gridcolor='rgba(128, 128, 128, 0.2)')),
+    )
+    
+    # Настройка текста внутри столбиков
+    fig.update_traces(textposition='inside', textfont=dict(color='white'))
+
+    return fig
