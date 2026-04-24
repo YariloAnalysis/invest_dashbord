@@ -8,7 +8,6 @@ require_auth()
 logout_button()
 
 import pandas as pd
-
 from constants           import COLORS_TOP, COLORS_DETAIL, REVERSE_MAP
 from data.portfolio      import load_portfolio_metrics, load_portfolio_today, load_bar_money, load_coupon_metrics
 from data.assets         import load_donut_top, load_donut_detail, load_top_alltime, load_top_daily
