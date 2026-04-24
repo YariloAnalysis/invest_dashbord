@@ -628,23 +628,32 @@ def build_payment_calendar(df: pd.DataFrame):
         '09': 'Сен', '10': 'Окт', '11': 'Ноя', '12': 'Дек'
     }
 
-    # Подготовка данных
     df = df.copy()
     df['year_month'] = df['payment_date'].dt.strftime('%Y-%m')
     df['month_num'] = df['payment_date'].dt.strftime('%m')
     df['month_name'] = df['month_num'].map(months_ru) + ' ' + df['payment_date'].dt.strftime('%Y')
 
-    # Группируем по месяцу и активу
+    # Группируем данные для блоков
     df_grouped = df.groupby(['year_month', 'month_name', 'name'])['amount'].sum().reset_index()
     df_grouped = df_grouped.sort_values('year_month')
 
-    # Строим график
+    # Находим максимальную сумму за месяц (чтобы правильно настроить высоту графика и скрытие текста)
+    monthly_totals = df_grouped.groupby(['year_month', 'month_name'])['amount'].sum().reset_index()
+    max_monthly_sum = monthly_totals['amount'].max() if not monthly_totals.empty else 0
+
+    # ФИШКА 1: Прячем текст в мелких блоках (меньше 4% от максимального месяца), чтобы убрать мусор
+    threshold = max_monthly_sum * 0.04
+    df_grouped['text_label'] = df_grouped['amount'].apply(
+        lambda x: f"{x:,.0f}".replace(',', ' ') if x >= threshold else ""
+    )
+
+    # Строим основной график
     fig = px.bar(
         df_grouped,
         x="month_name",
         y="amount",
         color="name",
-        text_auto='.0f',
+        text="text_label", # Используем нашу умную колонку вместо text_auto
         labels={
             "month_name": "",
             "amount": "Сумма (₽)",
@@ -652,23 +661,45 @@ def build_payment_calendar(df: pd.DataFrame):
         }
     )
 
-    # Настройки отображения
+    # ФИШКА 2: Добавляем общую сумму НАД каждым столбцом
+    fig.add_trace(go.Scatter(
+        x=monthly_totals['month_name'],
+        y=monthly_totals['amount'],
+        text=monthly_totals['amount'].apply(lambda x: f"<b>{x:,.0f} ₽</b>".replace(',', ' ')),
+        mode='text',
+        textposition='top center',
+        showlegend=False,
+        hoverinfo='skip' # Чтобы не ломать красивую всплывашку
+    ))
+
+    # Наводим красоту
     fig.update_layout(
         barmode='stack',
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
         hovermode="x unified",
-        margin=dict(l=0, r=0, t=10, b=0),
+        margin=dict(l=0, r=0, t=30, b=0), # Увеличили отступ сверху (t=30), чтобы влезли итоги
         legend=dict(
             orientation="h",
-            yanchor="bottom",
-            y=-0.3,
+            yanchor="top",
+            y=-0.15, # Чуть сдвинули легенду
             xanchor="center",
             x=0.5,
             title_text=""
         ),
-        yaxis=(dict(showgrid=True, gridcolor='rgba(128, 128, 128, 0.2)')),
+        yaxis=dict(
+            showgrid=True, 
+            gridcolor='rgba(128, 128, 128, 0.2)',
+            range=[0, max_monthly_sum * 1.15] # Увеличиваем высоту графика на 15%, чтобы итоги не обрезались
+        ),
     )
     
-    fig.update_traces(textposition='inside', textfont=dict(color='white'))
+    # Настройки отображения для самих столбцов (убираем эту настройку из add_trace)
+    fig.update_traces(
+        selector=dict(type='bar'), # Применяем только к столбцам
+        textposition='inside', 
+        textfont=dict(color='white'),
+        hovertemplate="<b>%{fullData.name}</b>: %{y:,.0f} ₽<extra></extra>"
+    )
+
     return fig
