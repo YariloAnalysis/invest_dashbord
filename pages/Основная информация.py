@@ -10,9 +10,9 @@ logout_button()
 import pandas as pd
 
 from constants           import COLORS_TOP, COLORS_DETAIL, REVERSE_MAP
-from data.portfolio      import load_portfolio_metrics, load_portfolio_today, load_bar_money, load_coupon_metrics
+from data.portfolio      import load_portfolio_metrics, load_portfolio_today, load_bar_money, load_coupon_metrics, load_payment_calendar
 from data.assets         import load_donut_top, load_donut_detail, load_top_alltime, load_top_daily
-from components.charts   import build_donut, build_portfolio_chart, build_bar_assets
+from components.charts   import build_donut, build_portfolio_chart, build_bar_assets, build_payment_calendar
 from components.metrics  import render_top, render_coupon_metrics
 
 # ── Session state ────────────────────────────────────────────
@@ -45,6 +45,9 @@ df_donut_detail  = load_donut_detail()
 df_alltime       = load_top_alltime()
 df_daily         = load_top_daily()
 
+# НОВОЕ: Загрузка данных для календаря
+df_payments      = load_payment_calendar() 
+
 # ── Шорткаты ─────────────────────────────────────────────────
 value_today    = metrics['value_today']
 invested_today = metrics['invested_today']
@@ -54,6 +57,7 @@ delta_return   = metrics['delta_return']
 suma           = coupons['suma']
 coupon         = coupons['coupon']
 diff_total_amount = metrics['diff_total_amount']
+df_payments    = coupons['df_coupons']
 
 # ════════════════════════════════════════════════════════════
 # СТРАНИЦА
@@ -116,19 +120,32 @@ if st.session_state.show_chart:
     fig_portfolio = build_portfolio_chart(df, all_dates, forecast)
     st.plotly_chart(fig_portfolio, use_container_width=False)
 
-# ── Детали доходности ────────────────────────────────────────
+# ── Детали доходности 
 if st.session_state.show_yield_details:
+    st.markdown("### 💸 Детали выплат")
+    
+    # Твои старые метрики
     render_coupon_metrics(
-    coupon=coupon,
-    suma=suma,
-    invested_today=invested_today
-)
+        coupon=coupon,
+        suma=suma,
+        invested_today=invested_today
+    )
+    
+    # Вызов графика
+    st.markdown("#### 🗓️ Календарь ожидаемых выплат (Текущий год)")
+    fig_calendar = build_payment_calendar(df_payments)
+    
+    if fig_calendar:
+        st.plotly_chart(fig_calendar, use_container_width=True)
+    else:
+        st.info("Пока нет данных о выплатах в этом году.")
 
 # ── Детали по активам ────────────────────────────────────────
 if st.session_state.show_assets_details:
     st.markdown("### 💼 Распределение по активам")
     fig_bar = build_bar_assets(df_bar)
     st.plotly_chart(fig_bar, use_container_width=True)
+    st.markdown("---")
 
 # ── Бублик + Топ активов ─────────────────────────────────────
 st.markdown("### 🥯 Доля активов")
