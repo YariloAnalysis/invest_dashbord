@@ -618,7 +618,7 @@ def build_monte_carlo(figi: str,          # ← принимаем figi
     return fig, var_value, last_price
 
 def build_payment_calendar(df: pd.DataFrame):
-    if df.empty:
+    if df is None or df.empty:
         return None
 
     # Словарь для красивого отображения месяцев на русском
@@ -636,7 +636,7 @@ def build_payment_calendar(df: pd.DataFrame):
 
     # Группируем по месяцу и активу
     df_grouped = df.groupby(['year_month', 'month_name', 'name'])['amount'].sum().reset_index()
-    df_grouped = df_grouped.sort_values('year_month') # Сортируем хронологически
+    df_grouped = df_grouped.sort_values('year_month')
 
     # Строим график
     fig = px.bar(
@@ -644,7 +644,7 @@ def build_payment_calendar(df: pd.DataFrame):
         x="month_name",
         y="amount",
         color="name",
-        text_auto='.0f', # Показывать суммы округленно до целых
+        text_auto='.0f',
         labels={
             "month_name": "",
             "amount": "Сумма (₽)",
@@ -652,7 +652,7 @@ def build_payment_calendar(df: pd.DataFrame):
         }
     )
 
-    # Наводим красоту (прозрачный фон, легенда внизу, чтобы не съедала место)
+    # Настройки отображения
     fig.update_layout(
         barmode='stack',
         plot_bgcolor="rgba(0,0,0,0)",
@@ -670,7 +670,6 @@ def build_payment_calendar(df: pd.DataFrame):
         yaxis=(dict(showgrid=True, gridcolor='rgba(128, 128, 128, 0.2)')),
     )
     
-    # Настройка текста внутри столбиков
     fig.update_traces(textposition='inside', textfont=dict(color='white'))
 
     return fig
