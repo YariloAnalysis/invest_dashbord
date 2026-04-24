@@ -617,6 +617,10 @@ def build_monte_carlo(figi: str,          # ← принимаем figi
 
     return fig, var_value, last_price
 
+import plotly.express as px
+import plotly.graph_objects as go
+import pandas as pd
+
 def build_payment_calendar(df: pd.DataFrame):
     if df is None or df.empty:
         return None
@@ -632,16 +636,20 @@ def build_payment_calendar(df: pd.DataFrame):
     df['year_month'] = df['payment_date'].dt.strftime('%Y-%m')
     df['month_num'] = df['payment_date'].dt.strftime('%m')
     df['month_name'] = df['month_num'].map(months_ru) + ' ' + df['payment_date'].dt.strftime('%Y')
+    
+    # ДОБАВЛЕНО: Создаем красивую строку с точной датой (например, 15.06.2026)
+    df['exact_date'] = df['payment_date'].dt.strftime('%d.%m.%Y')
 
-    # Группируем данные для блоков
-    df_grouped = df.groupby(['year_month', 'month_name', 'name'])['amount'].sum().reset_index()
-    df_grouped = df_grouped.sort_values('year_month')
+    # ИЗМЕНЕНО: Добавили exact_date в группировку. 
+    # Теперь если в одном месяце выплаты в разные дни, график их "запомнит"
+    df_grouped = df.groupby(['year_month', 'month_name', 'exact_date', 'name'])['amount'].sum().reset_index()
+    df_grouped = df_grouped.sort_values(['year_month', 'exact_date'])
 
-    # Находим максимальную сумму за месяц (чтобы правильно настроить высоту графика и скрытие текста)
+    # Считаем итоги по месяцам
     monthly_totals = df_grouped.groupby(['year_month', 'month_name'])['amount'].sum().reset_index()
     max_monthly_sum = monthly_totals['amount'].max() if not monthly_totals.empty else 0
 
-    # ФИШКА 1: Прячем текст в мелких блоках (меньше 4% от максимального месяца), чтобы убрать мусор
+    # Прячем текст в мелких блоках (меньше 4% от максимума)
     threshold = max_monthly_sum * 0.04
     df_grouped['text_label'] = df_grouped['amount'].apply(
         lambda x: f"{x:,.0f}".replace(',', ' ') if x >= threshold else ""
@@ -653,7 +661,8 @@ def build_payment_calendar(df: pd.DataFrame):
         x="month_name",
         y="amount",
         color="name",
-        text="text_label", # Используем нашу умную колонку вместо text_auto
+        text="text_label",
+        custom_data=["exact_date"], # ДОБАВЛЕНО: прокидываем точную дату в график
         labels={
             "month_name": "",
             "amount": "Сумма (₽)",
@@ -661,7 +670,7 @@ def build_payment_calendar(df: pd.DataFrame):
         }
     )
 
-    # ФИШКА 2: Добавляем общую сумму НАД каждым столбцом
+    # Итоги НАД столбцами
     fig.add_trace(go.Scatter(
         x=monthly_totals['month_name'],
         y=monthly_totals['amount'],
@@ -669,20 +678,20 @@ def build_payment_calendar(df: pd.DataFrame):
         mode='text',
         textposition='top center',
         showlegend=False,
-        hoverinfo='skip' # Чтобы не ломать красивую всплывашку
+        hoverinfo='skip'
     ))
 
-    # Наводим красоту
+    # Настройки визуала
     fig.update_layout(
         barmode='stack',
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
-        hovermode="x unified",
-        margin=dict(l=0, r=0, t=30, b=0), # Увеличили отступ сверху (t=30), чтобы влезли итоги
+        hovermode="x unified", # Показывает всплывашку для всего месяца сразу
+        margin=dict(l=0, r=0, t=30, b=0),
         legend=dict(
             orientation="h",
             yanchor="top",
-            y=-0.15, # Чуть сдвинули легенду
+            y=-0.15,
             xanchor="center",
             x=0.5,
             title_text=""
@@ -690,16 +699,16 @@ def build_payment_calendar(df: pd.DataFrame):
         yaxis=dict(
             showgrid=True, 
             gridcolor='rgba(128, 128, 128, 0.2)',
-            range=[0, max_monthly_sum * 1.15] # Увеличиваем высоту графика на 15%, чтобы итоги не обрезались
+            range=[0, max_monthly_sum * 1.15]
         ),
     )
     
-    # Настройки отображения для самих столбцов (убираем эту настройку из add_trace)
+    # ИЗМЕНЕНО: Настраиваем всплывашку. Вытаскиваем дату через %{customdata[0]}
     fig.update_traces(
-        selector=dict(type='bar'), # Применяем только к столбцам
+        selector=dict(type='bar'),
         textposition='inside', 
         textfont=dict(color='white'),
-        hovertemplate="<b>%{fullData.name}</b>: %{y:,.0f} ₽<extra></extra>"
+        hovertemplate="<b>%{fullData.name}</b> [%{customdata[0]}]: %{y:,.0f} ₽<extra></extra>"
     )
 
     return fig
