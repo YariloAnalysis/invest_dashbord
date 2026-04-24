@@ -45,7 +45,7 @@ df_alltime       = load_top_alltime()
 df_daily         = load_top_daily()
 
 # НОВОЕ: Загрузка данных для календаря
-df_payments      = load_payment_calendar() 
+df_payments      = load_coupon_metrics() 
 
 # ── Шорткаты ─────────────────────────────────────────────────
 value_today    = metrics['value_today']
