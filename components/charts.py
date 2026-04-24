@@ -671,4 +671,4 @@ def build_payment_calendar(df: pd.DataFrame):
     )
     
     fig.update_traces(textposition='inside', textfont=dict(color='white'))
-return fig
+    return fig
