@@ -7,7 +7,7 @@ from plotly.subplots import make_subplots
 from constants import COLORS_TOP, COLORS_DETAIL
 from data.portfolio import load_portfolio_metrics
 import streamlit as st
-@st.cache_data(ttl=3600)
+
 def build_donut(df, label_col, value_col, colors, center_text):
     """Универсальный бублик — принимает DataFrame и возвращает Figure"""
     fig = go.Figure(go.Pie(
@@ -449,7 +449,7 @@ def build_portfolio_chart(df, all_dates, forecast):
     )
 
     return fig
-@st.cache_data(ttl=3600)
+
 def build_bar_assets(df: pd.DataFrame):
     """
     Горизонтальный бар — распределение вложений по активам
@@ -478,7 +478,7 @@ def build_bar_assets(df: pd.DataFrame):
     )
 
     return fig
-@st.cache_data(ttl=3600)
+
 def build_market_comparison(df):
     """
     График сравнения портфеля и рынка
@@ -655,7 +655,7 @@ def build_market_comparison(df):
 
     return fig
 
-@st.cache_data(ttl=3600)
+
 def build_monthly_heatmap(df):
     df = df.copy()
     df['monthly_return'] = pd.to_numeric(df['monthly_return'], errors='coerce')
