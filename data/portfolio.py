@@ -7,7 +7,7 @@ from constants import FORECAST_DAYS
 
 
 @st.cache_data(ttl=3600)
-def load_portfolio_metrics():
+def load_portfolio_metrics(user_id: int):
     """Основные метрики портфеля + прогноз тренда"""
     df = api_get("/api/portfolio/metrics")
 
@@ -34,7 +34,7 @@ def load_portfolio_metrics():
     return df, all_dates, forecast_extended
 
 
-def load_portfolio_today():
+def load_portfolio_today(user_id: int):
     """Метрики за сегодня/вчера для карточек st.metric"""
     df, _, _ = load_portfolio_metrics()
 
@@ -62,14 +62,14 @@ def load_portfolio_today():
 
 
 @st.cache_data(ttl=3600)
-def load_bar_money():
+def load_bar_money(user_id: int):
     """Распределение вложений по типам активов → для bar-chart"""
     df = api_get("/api/portfolio/bar_money")
     return df.melt(id_vars=["nm"], var_name="активы", value_name="Вложено")
 
 
 @st.cache_data(ttl=3600)
-def load_coupon_metrics():
+def load_coupon_metrics(user_id: int):
     """Купонная доходность и данные для календаря выплат"""
     suma_per   = api_get("/api/portfolio/coupon_suma")
     coupon_per = api_get("/api/portfolio/coupon_amount")
