@@ -11,7 +11,7 @@ st.set_page_config(
     page_icon="📌",
 )
 
-from auth import require_auth
+from auth import require_auth,current_user_id
 from components.navigation import render_sidebar
 
 require_auth()
@@ -43,7 +43,7 @@ def toggle_assets_details():
 
 def toggle_yield_details():
     st.session_state.show_yield_details = not st.session_state.show_yield_details
-
+uid = current_user_id()
 # ── Загрузка данных ──────────────────────────────────────────
 metrics          = load_portfolio_today()
 df, all_dates, forecast = load_portfolio_metrics()
