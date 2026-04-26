@@ -61,8 +61,17 @@ df_payments    = coupons['df_coupons']
 # ════════════════════════════════════════════════════════════
 # СТРАНИЦА
 # ════════════════════════════════════════════════════════════
-st.markdown("## 📊 Основная информация")
-st.markdown("---")
+st.set_page_config(
+    layout="wide",
+    page_title="Основная информация",
+    page_icon="📌",
+)
+
+from components.navigation import render_sidebar
+
+render_sidebar()
+
+st.title("📌 Основная информация")
 
 # ── Три метрики ──────────────────────────────────────────────
 col1, col2, col3 = st.columns(3)
