@@ -8,23 +8,26 @@ import plotly.express as px
 # ← ВАШ модуль из корня проекта
 from db import api_get_json, api_post_json
 
-# ============================================================
-#                      КОНФИГУРАЦИЯ СТРАНИЦЫ
-# ============================================================
+
 st.set_page_config(
-    page_title="Оптимизация портфеля",
-    page_icon="📈",
     layout="wide",
+    page_title="Оптимизация портфеля",
+    page_icon="🚀",
 )
 
+from auth import require_auth
+from components.navigation import render_sidebar
+
+require_auth()
+render_sidebar()
+
+st.title("🚀 Оптимизация портфеля")
+
+st.caption("Современная портфельная теория: найдите оптимальное соотношение риск/доходность")
 # Проверка авторизации (у вас ключ — jwt_token + authenticated)
 if not st.session_state.get("authenticated") or not st.session_state.get("jwt_token"):
     st.warning("🔐 Пожалуйста, войдите в систему на главной странице.")
     st.stop()
-
-st.title("📈 Оптимизация портфеля — Markowitz")
-st.caption("Современная портфельная теория: найдите оптимальное соотношение риск/доходность")
-
 # ============================================================
 #                     САЙДБАР — ПАРАМЕТРЫ
 # ============================================================
