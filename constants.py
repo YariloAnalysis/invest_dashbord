@@ -22,4 +22,4 @@ MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
 
 USD_RATE     = 90
 AIM          = 300000
-FORECAST_DAYS = 2
+FORECAST_DAYS = 7
