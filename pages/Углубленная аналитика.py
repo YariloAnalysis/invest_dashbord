@@ -35,7 +35,7 @@ uid = current_user_id()
 # ════════════════════════════════════════════════════════════
 st.markdown("### 📊 Сравнение с рынком")
 
-df_market = load_market_comparison()
+df_market = load_market_comparison(uid)
 last      = df_market.iloc[-1]
 
 col1, col2, col3 = st.columns(3)
