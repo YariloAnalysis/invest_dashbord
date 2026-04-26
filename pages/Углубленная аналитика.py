@@ -10,7 +10,7 @@ st.set_page_config(
     page_icon="📈",
 )
 
-from auth import require_auth
+from auth import require_auth,current_user_id
 from components.navigation import render_sidebar
 
 require_auth()
@@ -28,8 +28,7 @@ from components.charts import (
     build_candle_chart,
     build_monte_carlo,
 )
-
-
+uid = current_user_id()
 
 # ════════════════════════════════════════════════════════════
 # БЛОК 1 — Сравнение с рынком
