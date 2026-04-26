@@ -45,17 +45,17 @@ def toggle_yield_details():
     st.session_state.show_yield_details = not st.session_state.show_yield_details
 uid = current_user_id()
 # ── Загрузка данных ──────────────────────────────────────────
-metrics          = load_portfolio_today()
-df, all_dates, forecast = load_portfolio_metrics()
-coupons          = load_coupon_metrics()
-df_bar           = load_bar_money()
-df_donut_top     = load_donut_top()
-df_donut_detail  = load_donut_detail()
-df_alltime       = load_top_alltime()
-df_daily         = load_top_daily()
+metrics          = load_portfolio_today(uid)
+df, all_dates, forecast = load_portfolio_metrics(uid)
+coupons          = load_coupon_metrics(uid)
+df_bar           = load_bar_money(uid)
+df_donut_top     = load_donut_top(uid)
+df_donut_detail  = load_donut_detail(uid)
+df_alltime       = load_top_alltime(uid)
+df_daily         = load_top_daily(uid)
 
 # НОВОЕ: Загрузка данных для календаря
-df_payments      = load_coupon_metrics() 
+df_payments      = load_coupon_metrics(uid) 
 
 # ── Шорткаты ─────────────────────────────────────────────────
 value_today    = metrics['value_today']
