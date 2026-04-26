@@ -450,6 +450,35 @@ def build_portfolio_chart(df, all_dates, forecast):
 
     return fig
 @st.cache_data(ttl=3600)
+def build_bar_assets(df: pd.DataFrame):
+    """
+    Горизонтальный бар — распределение вложений по активам
+    df — из load_bar_money()
+    """
+    fig = px.bar(
+        df,
+        x="активы",
+        y="Вложено",
+        text="Вложено",
+        color_discrete_sequence=["#F4A261"],
+    )
+
+    fig.update_traces(
+        texttemplate="%{text:,.0f} ₽",
+        textposition="outside",
+    )
+
+    fig.update_layout(
+        plot_bgcolor="#F8F9FA",
+        paper_bgcolor="white",
+        margin=dict(l=80, r=40, t=40, b=40),
+        height=400,
+        xaxis_title="Вложено, ₽",
+        yaxis_title="",
+    )
+
+    return fig
+@st.cache_data(ttl=3600)
 def build_market_comparison(df):
     """
     График сравнения портфеля и рынка
