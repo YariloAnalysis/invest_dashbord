@@ -67,7 +67,9 @@ def require_auth():
 
     st.stop()
 
-
+def current_user_id() -> int | None:
+    """Возвращает ID авторизованного пользователя или None."""
+    return st.session_state.get("user_id")
 def logout_button():
     """Кнопка выхода в сайдбаре"""
     if st.session_state.get("authenticated"):
@@ -81,6 +83,4 @@ def logout_button():
                 #    не утекли следующему пользователю
                 st.cache_data.clear()
                 st.rerun()
-def current_user_id() -> int | None:
-    """Возвращает ID авторизованного пользователя или None."""
-    return st.session_state.get("user_id")
+
