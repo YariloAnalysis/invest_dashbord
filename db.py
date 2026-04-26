@@ -1,4 +1,4 @@
-
+# db.py
 import streamlit as st
 import pandas as pd
 import requests
@@ -31,18 +31,24 @@ def get_token() -> str | None:
     return st.session_state.get("jwt_token")
 
 
+# ────────────────────────────────────────────────────────────
+# Единая обработка 401 — чистим всё (state + кэш) и останавливаем
+# ────────────────────────────────────────────────────────────
+def _handle_unauthorized():
+    st.error("🔒 Сессия истекла — войдите заново")
+    for key in ["jwt_token", "authenticated", "username", "user_id"]:
+        st.session_state.pop(key, None)
+    st.cache_data.clear()
+    st.stop()
+
+
 def api_get(endpoint: str, params: dict = None) -> pd.DataFrame:
-    """
-    GET к FastAPI. Возвращает pd.DataFrame.
-    Использует Bearer-токен из session_state.
-    """
     token = get_token()
     if not token:
         st.error("🔒 Требуется авторизация")
         st.stop()
 
     api_url = get_api_url()
-
     try:
         response = requests.get(
             f"{api_url}{endpoint}",
@@ -50,13 +56,8 @@ def api_get(endpoint: str, params: dict = None) -> pd.DataFrame:
             headers={"Authorization": f"Bearer {token}"},
             timeout=30,
         )
-
         if response.status_code == 401:
-            st.error("🔒 Сессия истекла — войдите заново")
-            for key in ["jwt_token", "authenticated", "username"]:
-                st.session_state.pop(key, None)
-            st.stop()
-
+            _handle_unauthorized()
         response.raise_for_status()
         data = response.json().get("data", [])
         return pd.DataFrame(data)
@@ -73,10 +74,6 @@ def api_get(endpoint: str, params: dict = None) -> pd.DataFrame:
 
 
 def login(username: str, password: str) -> bool:
-    """
-    Логин через ТВОЙ эндпоинт POST /api/login
-    Тело: JSON {"username": ..., "password": ...}
-    """
     api_url = get_api_url()
     try:
         response = requests.post(
@@ -86,10 +83,13 @@ def login(username: str, password: str) -> bool:
         )
         if response.status_code == 200:
             data = response.json()
-            st.session_state["jwt_token"] = data["access_token"]
+            # Чистим возможные «остатки» от предыдущей сессии в этом процессе
+            st.cache_data.clear()
+
+            st.session_state["jwt_token"]     = data["access_token"]
             st.session_state["authenticated"] = True
-            st.session_state["username"] = data["username"]
-            st.session_state["user_id"] = data["user_id"]
+            st.session_state["username"]      = data["username"]
+            st.session_state["user_id"]       = data["user_id"]
             return True
         return False
     except requests.exceptions.ConnectionError:
@@ -102,7 +102,6 @@ def login(username: str, password: str) -> bool:
 
 def register(username: str, email: str, password: str,
              broker_token: str = "", account_id: str = "") -> bool:
-    """Регистрация через POST /api/register"""
     api_url = get_api_url()
     try:
         response = requests.post(
@@ -118,10 +117,12 @@ def register(username: str, email: str, password: str,
         )
         if response.status_code == 200:
             data = response.json()
-            st.session_state["jwt_token"] = data["access_token"]
+            st.cache_data.clear()
+
+            st.session_state["jwt_token"]     = data["access_token"]
             st.session_state["authenticated"] = True
-            st.session_state["username"] = data["username"]
-            st.session_state["user_id"] = data["user_id"]
+            st.session_state["username"]      = data["username"]
+            st.session_state["user_id"]       = data["user_id"]
             return True
         elif response.status_code == 400:
             st.error("❌ Пользователь уже существует")
@@ -133,22 +134,19 @@ def register(username: str, email: str, password: str,
     except Exception as e:
         st.error(f"Ошибка: {e}")
         return False
+
+
 # ============================================================
 #   Хелперы для Markowitz-страницы (возвращают сырой JSON/dict)
 # ============================================================
 
 def api_get_json(endpoint: str, params: dict = None, timeout: int = 30) -> dict:
-    """
-    GET к FastAPI. Возвращает сырой dict из JSON-ответа.
-    Используется для эндпоинтов со сложной структурой (не табличные данные).
-    """
     token = get_token()
     if not token:
         st.error("🔒 Требуется авторизация")
         st.stop()
 
     api_url = get_api_url()
-
     try:
         response = requests.get(
             f"{api_url}{endpoint}",
@@ -156,20 +154,15 @@ def api_get_json(endpoint: str, params: dict = None, timeout: int = 30) -> dict:
             headers={"Authorization": f"Bearer {token}"},
             timeout=timeout,
         )
-
         if response.status_code == 401:
-            st.error("🔒 Сессия истекла — войдите заново")
-            for key in ["jwt_token", "authenticated", "username"]:
-                st.session_state.pop(key, None)
-            st.stop()
-
+            _handle_unauthorized()
         response.raise_for_status()
         return response.json()
 
     except requests.exceptions.ConnectionError:
         st.error("❌ Не удалось подключиться к API. Запущен ли FastAPI?")
         st.stop()
-    except requests.exceptions.HTTPError as e:
+    except requests.exceptions.HTTPError:
         try:
             detail = response.json()
         except Exception:
@@ -182,17 +175,12 @@ def api_get_json(endpoint: str, params: dict = None, timeout: int = 30) -> dict:
 
 
 def api_post_json(endpoint: str, payload: dict = None, timeout: int = 120) -> dict:
-    """
-    POST к FastAPI с JSON-телом. Возвращает сырой dict.
-    Таймаут 120 секунд — для долгих операций (бэктест, оптимизация).
-    """
     token = get_token()
     if not token:
         st.error("🔒 Требуется авторизация")
         st.stop()
 
     api_url = get_api_url()
-
     try:
         response = requests.post(
             f"{api_url}{endpoint}",
@@ -200,13 +188,8 @@ def api_post_json(endpoint: str, payload: dict = None, timeout: int = 120) -> di
             headers={"Authorization": f"Bearer {token}"},
             timeout=timeout,
         )
-
         if response.status_code == 401:
-            st.error("🔒 Сессия истекла — войдите заново")
-            for key in ["jwt_token", "authenticated", "username"]:
-                st.session_state.pop(key, None)
-            st.stop()
-
+            _handle_unauthorized()
         response.raise_for_status()
         return response.json()
 
