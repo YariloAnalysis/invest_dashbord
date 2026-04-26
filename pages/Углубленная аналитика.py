@@ -3,9 +3,20 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
-from auth import require_auth, logout_button
+
+st.set_page_config(
+    layout="wide",
+    page_title="Углубленная аналитика",
+    page_icon="📈",
+)
+
+from auth import require_auth
+from components.navigation import render_sidebar
+
 require_auth()
-logout_button()
+render_sidebar()
+
+st.title("📈 Углубленная аналитика")
 
 import pandas as pd
 import numpy as np
@@ -18,8 +29,7 @@ from components.charts import (
     build_monte_carlo,
 )
 
-st.markdown("## 🔍 Углубленная аналитика")
-st.markdown("---")
+
 
 # ════════════════════════════════════════════════════════════
 # БЛОК 1 — Сравнение с рынком
