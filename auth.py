@@ -74,6 +74,13 @@ def logout_button():
         with st.sidebar:
             st.markdown(f"👤 **{st.session_state.get('username', '')}**")
             if st.button("🚪 Выйти", use_container_width=True):
+                # 1) Чистим session_state
                 for key in ["jwt_token", "authenticated", "username", "user_id"]:
                     st.session_state.pop(key, None)
+                # 2) ВАЖНО: чистим серверный кэш, чтобы данные
+                #    не утекли следующему пользователю
+                st.cache_data.clear()
                 st.rerun()
+def current_user_id() -> int | None:
+    """Возвращает ID авторизованного пользователя или None."""
+    return st.session_state.get("user_id")
