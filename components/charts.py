@@ -53,7 +53,7 @@ def build_donut(df, label_col, value_col, colors, center_text):
         height=400,
     )
     return fig
-
+@st.cache_data(ttl=3600)
 def build_portfolio_chart(df, all_dates, forecast):
     """
     График динамики стоимости портфеля и вложенных средств.
