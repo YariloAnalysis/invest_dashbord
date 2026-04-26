@@ -54,88 +54,355 @@ def build_donut(df, label_col, value_col, colors, center_text):
     )
     return fig
 
-def build_portfolio_chart(df: pd.DataFrame, all_dates, forecast_extended):
+def build_portfolio_chart(df, all_dates, forecast):
     """
-    Основной график портфеля (Финтех-стиль)
-    df               — DataFrame из load_portfolio_metrics()
-    all_dates        — даты включая прогноз
-    forecast_extended — значения тренда включая прогноз
+    График динамики стоимости портфеля и вложенных средств.
+
+    Ожидаемые колонки df:
+    - date
+    - total_amount
+    - expected_yield
+    - fact_amount
+
+    Параметры:
+    - df: исторические данные портфеля
+    - all_dates: исторические даты + будущие даты для прогноза
+    - forecast: массив значений линейного тренда / прогноза
     """
-    # Так как мы убрали вторую ось (доходность), make_subplots больше не нужен.
-    # Используем базовый go.Figure()
+
+    plot_df = df.copy()
+
+    # ─────────────────────────────────────────────
+    # Подготовка данных
+    # ─────────────────────────────────────────────
+    required_columns = ["date", "total_amount", "expected_yield", "fact_amount"]
+
+    for col in required_columns:
+        if col not in plot_df.columns:
+            raise ValueError(
+                f"В df отсутствует обязательная колонка: {col}. "
+                f"Доступные колонки: {list(plot_df.columns)}"
+            )
+
+    plot_df["date"] = pd.to_datetime(plot_df["date"])
+    plot_df["total_amount"] = pd.to_numeric(plot_df["total_amount"], errors="coerce")
+    plot_df["expected_yield"] = pd.to_numeric(plot_df["expected_yield"], errors="coerce")
+    plot_df["fact_amount"] = pd.to_numeric(plot_df["fact_amount"], errors="coerce")
+
+    plot_df = plot_df.sort_values("date")
+    plot_df = plot_df.dropna(
+        subset=[
+            "date",
+            "total_amount",
+            "expected_yield",
+            "fact_amount",
+        ]
+    )
+
+    if plot_df.empty:
+        fig = go.Figure()
+        fig.update_layout(
+            title="Нет данных для построения графика",
+            template="plotly_white",
+            height=450,
+        )
+        return fig
+
+    # Доходность в процентах относительно вложенных средств
+    plot_df["yield_percent"] = np.where(
+        plot_df["fact_amount"] != 0,
+        plot_df["expected_yield"] / plot_df["fact_amount"] * 100,
+        np.nan,
+    )
+
+    # Красивое форматирование для hover
+    plot_df["total_amount_fmt"] = plot_df["total_amount"].apply(
+        lambda x: f"{x:,.0f} ₽".replace(",", " ")
+    )
+    plot_df["fact_amount_fmt"] = plot_df["fact_amount"].apply(
+        lambda x: f"{x:,.0f} ₽".replace(",", " ")
+    )
+    plot_df["expected_yield_fmt"] = plot_df["expected_yield"].apply(
+        lambda x: f"{x:,.0f} ₽".replace(",", " ")
+    )
+    plot_df["yield_percent_fmt"] = plot_df["yield_percent"].apply(
+        lambda x: "—" if pd.isna(x) else f"{x:+.2f}%"
+    )
+
+    latest = plot_df.iloc[-1]
+
+    latest_date = latest["date"]
+    latest_total = latest["total_amount"]
+    latest_invested = latest["fact_amount"]
+    latest_yield = latest["expected_yield"]
+    latest_yield_percent = latest["yield_percent"]
+
+    is_profit = latest_yield >= 0
+
+    profit_color = "#10b981" if is_profit else "#ef4444"
+    profit_bg = "rgba(16, 185, 129, 0.12)" if is_profit else "rgba(239, 68, 68, 0.12)"
+    fill_color = "rgba(16, 185, 129, 0.12)" if is_profit else "rgba(239, 68, 68, 0.10)"
+
+    # ─────────────────────────────────────────────
+    # Создание графика
+    # ─────────────────────────────────────────────
     fig = go.Figure()
 
-    # ── Цветовая палитра ─────────────────────────────────────
-    # Современные яркие цвета вместо серых тонов
-    color_invested = '#4361EE' # Яркий сине-фиолетовый
-    color_portfolio = '#10B981' # Сочный изумрудно-зеленый (ассоциация с ростом денег)
+    custom_data = np.stack(
+        [
+            plot_df["total_amount_fmt"],
+            plot_df["fact_amount_fmt"],
+            plot_df["expected_yield_fmt"],
+            plot_df["yield_percent_fmt"],
+        ],
+        axis=-1,
+    )
 
-    # ── Зона 1 — Вложенные средства (Базовая линия) ──────────
-    fig.add_trace(go.Scatter(
-        x=df['date'],
-        y=df['fact_amount'],
-        name='Вложенные средства',
-        mode='lines',
-        line=dict(color=color_invested, width=3, shape='spline', smoothing=0.8),
-        fill='tozeroy', # Заливка до самого низа
-        fillcolor='rgba(67, 97, 238, 0.1)', # Очень легкая прозрачная заливка
-        hovertemplate='Вложено: %{y:,.0f} ₽<extra></extra>'
-    ))
-
-    # ── Зона 2 — Стоимость портфеля (Верхняя линия) ──────────
-    # Используем fill='tonexty', чтобы закрасить разницу (прибыль) между вложенным и текущим
-    fig.add_trace(go.Scatter(
-        x=df['date'],
-        y=df['total_amount'],
-        name='Стоимость портфеля',
-        mode='lines',
-        line=dict(color=color_portfolio, width=3, shape='spline', smoothing=0.8),
-        fill='tonexty', # Заливка пространства между вложенными средствами и текущей стоимостью
-        fillcolor='rgba(16, 185, 129, 0.15)', # Зеленоватая подсветка прибыли
-        hovertemplate='Стоимость: %{y:,.0f} ₽<extra></extra>'
-    ))
-
-    # ── Дизайн и Layout ──────────────────────────────────────
-    fig.update_layout(
-        title=dict(
-            text='Процесс рождения деняк',
-            x=0.05, # Сместили заголовок влево (современный стиль)
-            font=dict(size=20, family='Inter, sans-serif', color='#1F2937')
-        ),
-        plot_bgcolor='#FFFFFF', # Чистый белый фон для контраста
-        paper_bgcolor='#FFFFFF',
-        font=dict(family='Inter, sans-serif', size=13, color='#4B5563'),
-        hovermode='x unified', # Единое окно при наведении (сразу показывает обе суммы)
-        height=550,
-        margin=dict(l=20, r=20, t=80, b=40),
-        legend=dict(
-            orientation='h',
-            yanchor='bottom',
-            y=1.02,
-            xanchor='right',
-            x=1,
-            bgcolor='rgba(255, 255, 255, 0)' # Прозрачный фон легенды
+    # Вложенные средства
+    fig.add_trace(
+        go.Scatter(
+            x=plot_df["date"],
+            y=plot_df["fact_amount"],
+            name="Вложенные средства",
+            mode="lines",
+            line=dict(
+                color="#6366f1",
+                width=3,
+                shape="spline",
+                smoothing=0.45,
+            ),
+            fill="tozeroy",
+            fillcolor="rgba(99, 102, 241, 0.08)",
+            customdata=custom_data,
+            hovertemplate=(
+                "<b>%{x|%d.%m.%Y}</b><br><br>"
+                "Вложено: <b>%{customdata[1]}</b><br>"
+                "Стоимость портфеля: %{customdata[0]}<br>"
+                "Результат: %{customdata[2]}<br>"
+                "Доходность: %{customdata[3]}"
+                "<extra></extra>"
+            ),
         )
     )
 
-    # ── Настройка осей ───────────────────────────────────────
-    fig.update_xaxes(
-        type='date',
-        showgrid=False, # Убираем вертикальную сетку для чистоты
-        showline=False,
-        tickfont=dict(size=11, color='#9CA3AF'),
-        dtick="M1", # Шаг сетки (опционально, показывает месяцы)
+    # Стоимость портфеля
+    fig.add_trace(
+        go.Scatter(
+            x=plot_df["date"],
+            y=plot_df["total_amount"],
+            name="Стоимость портфеля",
+            mode="lines",
+            line=dict(
+                color="#10b981",
+                width=4,
+                shape="spline",
+                smoothing=0.45,
+            ),
+            fill="tonexty",
+            fillcolor=fill_color,
+            customdata=custom_data,
+            hovertemplate=(
+                "<b>%{x|%d.%m.%Y}</b><br><br>"
+                "Стоимость портфеля: <b>%{customdata[0]}</b><br>"
+                "Вложено: %{customdata[1]}<br>"
+                "Результат: %{customdata[2]}<br>"
+                "Доходность: %{customdata[3]}"
+                "<extra></extra>"
+            ),
+        )
     )
-    
-    fig.update_yaxes(
-        title_text='', # Убрали надпись "Сумма", так как из контекста и так понятно
-        showgrid=True,
-        gridcolor='#F3F4F6', # Очень мягкая горизонтальная сетка
-        gridwidth=1,
-        showline=False,
+
+    # ─────────────────────────────────────────────
+    # Линия прогноза / тренда
+    # ─────────────────────────────────────────────
+    if forecast is not None and all_dates is not None:
+        try:
+            forecast_values = np.asarray(forecast, dtype=float)
+            forecast_dates = pd.to_datetime(all_dates)
+
+            min_len = min(len(forecast_values), len(forecast_dates))
+
+            forecast_values = forecast_values[:min_len]
+            forecast_dates = forecast_dates[:min_len]
+
+            if min_len > 0:
+                fig.add_trace(
+                    go.Scatter(
+                        x=forecast_dates,
+                        y=forecast_values,
+                        name="Тренд и прогноз",
+                        mode="lines",
+                        line=dict(
+                            color="#f59e0b",
+                            width=3,
+                            dash="dash",
+                            shape="spline",
+                            smoothing=0.45,
+                        ),
+                        hovertemplate=(
+                            "<b>%{x|%d.%m.%Y}</b><br><br>"
+                            "Тренд / прогноз: <b>%{y:,.0f} ₽</b>"
+                            "<extra></extra>"
+                        ),
+                    )
+                )
+
+                # Вертикальная линия начала прогноза
+                fig.add_vline(
+                    x=latest_date,
+                    line_width=1,
+                    line_dash="dot",
+                    line_color="rgba(100, 116, 139, 0.9)",
+                )
+
+                fig.add_annotation(
+                    x=latest_date,
+                    y=latest_total,
+                    text="Начало прогноза",
+                    showarrow=False,
+                    yshift=35,
+                    font=dict(
+                        size=12,
+                        color="#64748b",
+                    ),
+                )
+
+        except Exception:
+            pass
+
+    # ─────────────────────────────────────────────
+    # Акцент на последней точке
+    # ─────────────────────────────────────────────
+    fig.add_trace(
+        go.Scatter(
+            x=[latest_date],
+            y=[latest_total],
+            name="Текущая стоимость",
+            mode="markers",
+            marker=dict(
+                size=12,
+                color="#ffffff",
+                line=dict(
+                    color=profit_color,
+                    width=3,
+                ),
+            ),
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    )
+
+    # Аннотация результата
+    latest_yield_text = f"{latest_yield:,.0f} ₽".replace(",", " ")
+    latest_yield_percent_text = (
+        "—" if pd.isna(latest_yield_percent) else f"{latest_yield_percent:+.2f}%"
+    )
+
+    annotation_text = (
+        f"<b>{'Прибыль' if is_profit else 'Убыток'}: {latest_yield_text}</b><br>"
+        f"{latest_yield_percent_text}"
+    )
+
+    fig.add_annotation(
+        x=latest_date,
+        y=latest_total,
+        text=annotation_text,
+        showarrow=True,
+        arrowhead=2,
+        arrowsize=1,
+        arrowwidth=1.5,
+        arrowcolor=profit_color,
+        ax=-75,
+        ay=-60,
+        bgcolor=profit_bg,
+        bordercolor=profit_color,
+        borderwidth=1,
+        borderpad=8,
+        font=dict(
+            color=profit_color,
+            size=13,
+        ),
+    )
+
+    # ─────────────────────────────────────────────
+    # Оформление графика
+    # ─────────────────────────────────────────────
+    fig.update_layout(
+        title=dict(
+            text=(
+                "<b>Динамика стоимости портфеля</b>"
+                "<br><sup>Сравнение текущей стоимости портфеля с вложенными средствами</sup>"
+            ),
+            x=0.02,
+            xanchor="left",
+            font=dict(
+                size=24,
+                color="#0f172a",
+            ),
+        ),
+        height=560,
+        template="plotly_white",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(248,250,252,0.85)",
+        margin=dict(
+            l=35,
+            r=35,
+            t=100,
+            b=40,
+        ),
+        hovermode="x unified",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.03,
+            xanchor="right",
+            x=1,
+            bgcolor="rgba(255,255,255,0)",
+            font=dict(
+                size=13,
+                color="#334155",
+            ),
+        ),
+        font=dict(
+            family="Inter, Arial, sans-serif",
+            color="#334155",
+        ),
+    )
+
+    fig.update_xaxes(
+        showgrid=False,
         zeroline=False,
-        tickfont=dict(size=11, color='#9CA3AF'),
-        tickformat="~s", # Сокращает большие числа (например, 140k вместо 140000)
+        linecolor="rgba(148, 163, 184, 0.35)",
+        tickfont=dict(
+            size=12,
+            color="#64748b",
+        ),
+        rangeselector=dict(
+            buttons=[
+                dict(count=1, label="1М", step="month", stepmode="backward"),
+                dict(count=3, label="3М", step="month", stepmode="backward"),
+                dict(count=6, label="6М", step="month", stepmode="backward"),
+                dict(step="all", label="Все"),
+            ],
+            bgcolor="rgba(241, 245, 249, 0.95)",
+            activecolor="rgba(16, 185, 129, 0.18)",
+            font=dict(
+                size=12,
+                color="#334155",
+            ),
+        ),
+    )
+
+    fig.update_yaxes(
+        showgrid=True,
+        gridcolor="rgba(148, 163, 184, 0.18)",
+        zeroline=False,
+        tickformat=",.0f",
+        ticksuffix=" ₽",
+        tickfont=dict(
+            size=12,
+            color="#64748b",
+        ),
     )
 
     return fig
