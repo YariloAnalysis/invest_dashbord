@@ -65,7 +65,7 @@ st.markdown("---")
 # ════════════════════════════════════════════════════════════
 st.markdown("### 📅 Доходность по месяцам")
 
-df_monthly = load_monthly_returns()
+df_monthly = load_monthly_returns(uid)
 df_monthly['monthly_return'] = pd.to_numeric(df_monthly['monthly_return'], errors='coerce')
 
 best_month  = df_monthly.loc[df_monthly['monthly_return'].idxmax()]
