@@ -1,11 +1,21 @@
 import sys
 import os
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
-from auth import require_auth, logout_button
+
+st.set_page_config(
+    layout="wide",
+    page_title="Основная информация",
+    page_icon="📌",
+)
+
+from auth import require_auth
+from components.navigation import render_sidebar
+
 require_auth()
-logout_button()
+render_sidebar()
 
 import pandas as pd
 from constants           import COLORS_TOP, COLORS_DETAIL, REVERSE_MAP
@@ -58,20 +68,7 @@ coupon         = coupons['coupon']
 diff_total_amount = metrics['diff_total_amount']
 df_payments    = coupons['df_coupons']
 
-# ════════════════════════════════════════════════════════════
-# СТРАНИЦА
-# ════════════════════════════════════════════════════════════
-st.set_page_config(
-    layout="wide",
-    page_title="Основная информация",
-    page_icon="📌",
-)
 
-from components.navigation import render_sidebar
-
-render_sidebar()
-
-st.title("📌 Основная информация")
 
 # ── Три метрики ──────────────────────────────────────────────
 col1, col2, col3 = st.columns(3)
