@@ -15,7 +15,7 @@ st.set_page_config(
     page_icon="🚀",
 )
 
-from auth import require_auth
+from auth import require_auth,current_user_id
 from components.navigation import render_sidebar
 
 require_auth()
@@ -28,6 +28,7 @@ st.caption("Современная портфельная теория: найд
 if not st.session_state.get("authenticated") or not st.session_state.get("jwt_token"):
     st.warning("🔐 Пожалуйста, войдите в систему на главной странице.")
     st.stop()
+uid = current_user_id()
 # ============================================================
 #                     САЙДБАР — ПАРАМЕТРЫ
 # ============================================================
