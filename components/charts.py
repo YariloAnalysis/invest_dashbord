@@ -752,7 +752,7 @@ EMA_SETTINGS = {
     '1Y' : (10, 30),
     'ALL': (10, 30),
 }
-@st.cache_data(ttl=3600)
+
 def build_candle_chart(df_full: pd.DataFrame,
                        df_display: pd.DataFrame,
                        ticker_name: str,
@@ -845,7 +845,7 @@ def build_candle_chart(df_full: pd.DataFrame,
 
 
 from data.assets import load_candles_for_mc
-@st.cache_data(ttl=3600)
+
 def build_monte_carlo(figi: str,          # ← принимаем figi
                       ticker_name: str,
                       num_simulations: int = 1000,
