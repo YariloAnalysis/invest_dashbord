@@ -36,7 +36,7 @@ def load_portfolio_metrics(user_id: int):
 
 def load_portfolio_today(user_id: int):
     """Метрики за сегодня/вчера для карточек st.metric"""
-    df, _, _ = load_portfolio_metrics()
+    df, _, _ = load_portfolio_metrics(user_id: int)
 
     today     = df.iloc[-1]
     yesterday = df.iloc[-2]
