@@ -56,25 +56,21 @@ def build_donut(df, label_col, value_col, colors, center_text):
 @st.cache_data(ttl=3600)
 def build_portfolio_chart(df, all_dates, forecast):
     """
-    График динамики стоимости портфеля и вложенных средств.
+    Улучшенный график динамики стоимости портфеля и вложенных средств.
 
-    Ожидаемые колонки df:
+    Использует колонки:
     - date
-    - total_amount
-    - expected_yield
-    - fact_amount
-
-    Параметры:
-    - df: исторические данные портфеля
-    - all_dates: исторические даты + будущие даты для прогноза
-    - forecast: массив значений линейного тренда / прогноза
+    - total_amount      — стоимость портфеля
+    - expected_yield    — прибыль / убыток
+    - fact_amount       — вложенные средства
     """
+
+    import numpy as np
+    import pandas as pd
+    import plotly.graph_objects as go
 
     plot_df = df.copy()
 
-    # ─────────────────────────────────────────────
-    # Подготовка данных
-    # ─────────────────────────────────────────────
     required_columns = ["date", "total_amount", "expected_yield", "fact_amount"]
 
     for col in required_columns:
@@ -84,19 +80,16 @@ def build_portfolio_chart(df, all_dates, forecast):
                 f"Доступные колонки: {list(plot_df.columns)}"
             )
 
+    # ─────────────────────────────────────────────
+    # Подготовка данных
+    # ─────────────────────────────────────────────
     plot_df["date"] = pd.to_datetime(plot_df["date"])
     plot_df["total_amount"] = pd.to_numeric(plot_df["total_amount"], errors="coerce")
     plot_df["expected_yield"] = pd.to_numeric(plot_df["expected_yield"], errors="coerce")
     plot_df["fact_amount"] = pd.to_numeric(plot_df["fact_amount"], errors="coerce")
 
-    plot_df = plot_df.sort_values("date")
-    plot_df = plot_df.dropna(
-        subset=[
-            "date",
-            "total_amount",
-            "expected_yield",
-            "fact_amount",
-        ]
+    plot_df = plot_df.sort_values("date").dropna(
+        subset=["date", "total_amount", "expected_yield", "fact_amount"]
     )
 
     if plot_df.empty:
@@ -108,32 +101,31 @@ def build_portfolio_chart(df, all_dates, forecast):
         )
         return fig
 
-    # Доходность в процентах относительно вложенных средств
     plot_df["yield_percent"] = np.where(
         plot_df["fact_amount"] != 0,
         plot_df["expected_yield"] / plot_df["fact_amount"] * 100,
         np.nan,
     )
 
-    # Красивое форматирование для hover
-    plot_df["total_amount_fmt"] = plot_df["total_amount"].apply(
-        lambda x: f"{x:,.0f} ₽".replace(",", " ")
-    )
-    plot_df["fact_amount_fmt"] = plot_df["fact_amount"].apply(
-        lambda x: f"{x:,.0f} ₽".replace(",", " ")
-    )
-    plot_df["expected_yield_fmt"] = plot_df["expected_yield"].apply(
-        lambda x: f"{x:,.0f} ₽".replace(",", " ")
-    )
-    plot_df["yield_percent_fmt"] = plot_df["yield_percent"].apply(
-        lambda x: "—" if pd.isna(x) else f"{x:+.2f}%"
-    )
+    def money_fmt(value):
+        if pd.isna(value):
+            return "—"
+        return f"{value:,.0f} ₽".replace(",", " ")
+
+    def percent_fmt(value):
+        if pd.isna(value):
+            return "—"
+        return f"{value:+.2f}%"
+
+    plot_df["total_amount_fmt"] = plot_df["total_amount"].apply(money_fmt)
+    plot_df["fact_amount_fmt"] = plot_df["fact_amount"].apply(money_fmt)
+    plot_df["expected_yield_fmt"] = plot_df["expected_yield"].apply(money_fmt)
+    plot_df["yield_percent_fmt"] = plot_df["yield_percent"].apply(percent_fmt)
 
     latest = plot_df.iloc[-1]
 
     latest_date = latest["date"]
     latest_total = latest["total_amount"]
-    latest_invested = latest["fact_amount"]
     latest_yield = latest["expected_yield"]
     latest_yield_percent = latest["yield_percent"]
 
@@ -141,12 +133,7 @@ def build_portfolio_chart(df, all_dates, forecast):
 
     profit_color = "#10b981" if is_profit else "#ef4444"
     profit_bg = "rgba(16, 185, 129, 0.12)" if is_profit else "rgba(239, 68, 68, 0.12)"
-    fill_color = "rgba(16, 185, 129, 0.12)" if is_profit else "rgba(239, 68, 68, 0.10)"
-
-    # ─────────────────────────────────────────────
-    # Создание графика
-    # ─────────────────────────────────────────────
-    fig = go.Figure()
+    area_color = "rgba(16, 185, 129, 0.13)" if is_profit else "rgba(239, 68, 68, 0.11)"
 
     custom_data = np.stack(
         [
@@ -158,6 +145,34 @@ def build_portfolio_chart(df, all_dates, forecast):
         axis=-1,
     )
 
+    # ─────────────────────────────────────────────
+    # Расчёт комфортного диапазона Y
+    # Чтобы график не начинался от нуля
+    # ─────────────────────────────────────────────
+    y_values = list(plot_df["total_amount"]) + list(plot_df["fact_amount"])
+
+    if forecast is not None:
+        try:
+            forecast_values_for_range = np.asarray(forecast, dtype=float)
+            y_values += list(forecast_values_for_range)
+        except Exception:
+            pass
+
+    y_values = [value for value in y_values if not pd.isna(value)]
+
+    y_min = min(y_values)
+    y_max = max(y_values)
+
+    y_padding = max((y_max - y_min) * 0.18, y_max * 0.025)
+
+    y_axis_min = max(0, y_min - y_padding)
+    y_axis_max = y_max + y_padding
+
+    # ─────────────────────────────────────────────
+    # Создание графика
+    # ─────────────────────────────────────────────
+    fig = go.Figure()
+
     # Вложенные средства
     fig.add_trace(
         go.Scatter(
@@ -168,11 +183,8 @@ def build_portfolio_chart(df, all_dates, forecast):
             line=dict(
                 color="#6366f1",
                 width=3,
-                shape="spline",
-                smoothing=0.45,
+                shape="linear",
             ),
-            fill="tozeroy",
-            fillcolor="rgba(99, 102, 241, 0.08)",
             customdata=custom_data,
             hovertemplate=(
                 "<b>%{x|%d.%m.%Y}</b><br><br>"
@@ -185,7 +197,7 @@ def build_portfolio_chart(df, all_dates, forecast):
         )
     )
 
-    # Стоимость портфеля
+    # Стоимость портфеля + заливка между линиями
     fig.add_trace(
         go.Scatter(
             x=plot_df["date"],
@@ -195,11 +207,10 @@ def build_portfolio_chart(df, all_dates, forecast):
             line=dict(
                 color="#10b981",
                 width=4,
-                shape="spline",
-                smoothing=0.45,
+                shape="linear",
             ),
             fill="tonexty",
-            fillcolor=fill_color,
+            fillcolor=area_color,
             customdata=custom_data,
             hovertemplate=(
                 "<b>%{x|%d.%m.%Y}</b><br><br>"
@@ -213,7 +224,7 @@ def build_portfolio_chart(df, all_dates, forecast):
     )
 
     # ─────────────────────────────────────────────
-    # Линия прогноза / тренда
+    # Тренд и прогноз
     # ─────────────────────────────────────────────
     if forecast is not None and all_dates is not None:
         try:
@@ -225,44 +236,75 @@ def build_portfolio_chart(df, all_dates, forecast):
             forecast_values = forecast_values[:min_len]
             forecast_dates = forecast_dates[:min_len]
 
-            if min_len > 0:
+            history_len = len(plot_df)
+
+            # Историческая часть тренда
+            trend_dates = forecast_dates[:history_len]
+            trend_values = forecast_values[:history_len]
+
+            # Будущая часть прогноза.
+            # Берём с последней исторической точки, чтобы линия прогноза начиналась плавно.
+            future_dates = forecast_dates[history_len - 1:min_len]
+            future_values = forecast_values[history_len - 1:min_len]
+
+            if len(trend_dates) > 0:
                 fig.add_trace(
                     go.Scatter(
-                        x=forecast_dates,
-                        y=forecast_values,
-                        name="Тренд и прогноз",
+                        x=trend_dates,
+                        y=trend_values,
+                        name="Тренд",
                         mode="lines",
                         line=dict(
                             color="#f59e0b",
-                            width=3,
-                            dash="dash",
-                            shape="spline",
-                            smoothing=0.45,
+                            width=2.5,
+                            dash="dot",
+                            shape="linear",
                         ),
                         hovertemplate=(
                             "<b>%{x|%d.%m.%Y}</b><br><br>"
-                            "Тренд / прогноз: <b>%{y:,.0f} ₽</b>"
+                            "Линия тренда: <b>%{y:,.0f} ₽</b>"
                             "<extra></extra>"
                         ),
                     )
                 )
 
-                # Вертикальная линия начала прогноза
+            if len(future_dates) > 1:
+                fig.add_trace(
+                    go.Scatter(
+                        x=future_dates,
+                        y=future_values,
+                        name="Прогноз",
+                        mode="lines",
+                        line=dict(
+                            color="#f97316",
+                            width=3,
+                            dash="dash",
+                            shape="linear",
+                        ),
+                        hovertemplate=(
+                            "<b>%{x|%d.%m.%Y}</b><br><br>"
+                            "Прогноз: <b>%{y:,.0f} ₽</b>"
+                            "<extra></extra>"
+                        ),
+                    )
+                )
+
                 fig.add_vline(
                     x=latest_date,
                     line_width=1,
-                    line_dash="dot",
-                    line_color="rgba(100, 116, 139, 0.9)",
+                    line_dash="dash",
+                    line_color="rgba(100, 116, 139, 0.65)",
                 )
 
                 fig.add_annotation(
                     x=latest_date,
-                    y=latest_total,
-                    text="Начало прогноза",
+                    y=y_axis_max,
+                    text="старт прогноза",
                     showarrow=False,
-                    yshift=35,
+                    yshift=-18,
+                    xshift=44,
                     font=dict(
-                        size=12,
+                        size=11,
                         color="#64748b",
                     ),
                 )
@@ -271,7 +313,7 @@ def build_portfolio_chart(df, all_dates, forecast):
             pass
 
     # ─────────────────────────────────────────────
-    # Акцент на последней точке
+    # Последняя точка
     # ─────────────────────────────────────────────
     fig.add_trace(
         go.Scatter(
@@ -280,7 +322,7 @@ def build_portfolio_chart(df, all_dates, forecast):
             name="Текущая стоимость",
             mode="markers",
             marker=dict(
-                size=12,
+                size=11,
                 color="#ffffff",
                 line=dict(
                     color=profit_color,
@@ -292,11 +334,9 @@ def build_portfolio_chart(df, all_dates, forecast):
         )
     )
 
-    # Аннотация результата
-    latest_yield_text = f"{latest_yield:,.0f} ₽".replace(",", " ")
-    latest_yield_percent_text = (
-        "—" if pd.isna(latest_yield_percent) else f"{latest_yield_percent:+.2f}%"
-    )
+    # Аннотация текущего результата
+    latest_yield_text = money_fmt(latest_yield)
+    latest_yield_percent_text = percent_fmt(latest_yield_percent)
 
     annotation_text = (
         f"<b>{'Прибыль' if is_profit else 'Убыток'}: {latest_yield_text}</b><br>"
@@ -310,56 +350,58 @@ def build_portfolio_chart(df, all_dates, forecast):
         showarrow=True,
         arrowhead=2,
         arrowsize=1,
-        arrowwidth=1.5,
+        arrowwidth=1.3,
         arrowcolor=profit_color,
-        ax=-75,
-        ay=-60,
+        ax=-80,
+        ay=-45,
         bgcolor=profit_bg,
         bordercolor=profit_color,
         borderwidth=1,
-        borderpad=8,
+        borderpad=7,
         font=dict(
             color=profit_color,
-            size=13,
+            size=12,
         ),
     )
 
     # ─────────────────────────────────────────────
-    # Оформление графика
+    # Оформление
     # ─────────────────────────────────────────────
     fig.update_layout(
         title=dict(
             text=(
                 "<b>Динамика стоимости портфеля</b>"
-                "<br><sup>Сравнение текущей стоимости портфеля с вложенными средствами</sup>"
+                "<br><sup>Стоимость портфеля относительно вложенных средств</sup>"
             ),
             x=0.02,
+            y=0.98,
             xanchor="left",
+            yanchor="top",
             font=dict(
-                size=24,
+                size=22,
                 color="#0f172a",
             ),
         ),
         height=560,
         template="plotly_white",
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(248,250,252,0.85)",
+        plot_bgcolor="rgba(248,250,252,0.75)",
         margin=dict(
             l=35,
             r=35,
-            t=100,
-            b=40,
+            t=120,
+            b=45,
         ),
         hovermode="x unified",
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.03,
+            y=1.04,
             xanchor="right",
             x=1,
             bgcolor="rgba(255,255,255,0)",
             font=dict(
-                size=13,
+                size=12,
                 color="#334155",
             ),
         ),
@@ -394,6 +436,7 @@ def build_portfolio_chart(df, all_dates, forecast):
     )
 
     fig.update_yaxes(
+        range=[y_axis_min, y_axis_max],
         showgrid=True,
         gridcolor="rgba(148, 163, 184, 0.18)",
         zeroline=False,
@@ -403,35 +446,6 @@ def build_portfolio_chart(df, all_dates, forecast):
             size=12,
             color="#64748b",
         ),
-    )
-
-    return fig
-@st.cache_data(ttl=3600)
-def build_bar_assets(df: pd.DataFrame):
-    """
-    Горизонтальный бар — распределение вложений по активам
-    df — из load_bar_money()
-    """
-    fig = px.bar(
-        df,
-        x="активы",
-        y="Вложено",
-        text="Вложено",
-        color_discrete_sequence=["#F4A261"],
-    )
-
-    fig.update_traces(
-        texttemplate="%{text:,.0f} ₽",
-        textposition="outside",
-    )
-
-    fig.update_layout(
-        plot_bgcolor="#F8F9FA",
-        paper_bgcolor="white",
-        margin=dict(l=80, r=40, t=40, b=40),
-        height=400,
-        xaxis_title="Вложено, ₽",
-        yaxis_title="",
     )
 
     return fig
